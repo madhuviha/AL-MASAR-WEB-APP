@@ -15,10 +15,16 @@ test('a last-known invalid GPS position remains classifiable and visible',()=>{
  assert.equal(status.group,'parked');
 });
 
-test('defaults to Currently Untracked after fifteen minutes without communication',()=>{
+test('stale communication is Offline instead of retaining the last operating state',()=>{
  const now=Date.now();
  const status=mapStatus({device:{lastUpdate:new Date(now-16*60000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-16*60000).toISOString(),fixTime:new Date(now-16*60000).toISOString(),speed:0,attributes:{ignition:false}}},{offlineMinutes:300},now);
- assert.equal(status.group,'untracked');
+ assert.equal(status.group,'offline');
+});
+
+test('a recent R12 zero-speed packet remains Parked',()=>{
+ const now=Date.now();
+ const status=mapStatus({protocol:'GT06',deviceModel:'R12',device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:0,attributes:{ignition:false,motion:false}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'parked');
 });
 
 test('a stopped vehicle with ignition on remains Idle',()=>{
