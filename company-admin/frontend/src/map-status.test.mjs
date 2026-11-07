@@ -45,6 +45,20 @@ test('zero speed is authoritative over a stale motion flag',()=>{
  assert.equal(status.group,'parked');
 });
 
+test('R12 display stays Parked when ignition is OFF despite stale speed and motion',()=>{
+ const now=Date.now();
+ const status=mapStatus({protocol:'GT06',deviceModel:'R12',device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:8/1.852,attributes:{ignition:false,motion:true}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'parked');
+ assert.equal(status.operating,'parked');
+ assert.equal(status.speed,8);
+});
+
+test('H9 keeps moving display for the same raw packet',()=>{
+ const now=Date.now();
+ const status=mapStatus({protocol:'GT06',deviceModel:'H9',device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:8/1.852,attributes:{ignition:false,motion:true}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'moving');
+});
+
 test('latest communication prefers a fresh heartbeat over an older GPS position',()=>{
  const now=Date.now();
  const heartbeat=new Date(now-3*60000).toISOString();

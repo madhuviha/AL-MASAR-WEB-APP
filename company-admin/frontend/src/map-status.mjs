@@ -2,6 +2,10 @@ import {engineState} from './telemetry-state.mjs';
 // Shared communication timing; GPS fix validity is a separate label.
 const finite=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
 const bool=v=>v===true||v===1||v==='1'||v==='true'||v==='on'||v==='ON'?true:v===false||v===0||v==='0'||v==='false'||v==='off'||v==='OFF'?false:null;
+const isR12=v=>{
+ const model=[v?.deviceModel,v?.device_model,v?.deviceModelId,v?.device_model_id,v?.model,v?.device?.deviceModel,v?.device?.device_model,v?.device?.model,v?.local?.deviceModel,v?.local?.device_model,v?.local?.deviceModelId,v?.local?.device_model_id,v?.local?.model,v?.protocol,v?.device?.name].filter(Boolean).join(' ');
+ return /\br12(?:[- ]?lf)?\b/i.test(model);
+};
 export function mapStatus(v,settings={},now=Date.now()){
  if(v?.expired===true||v?.liveAccess===false||v?.live_access===false||v?.accessStatus==='expired'||v?.access_status==='expired'||v?.local?.expired===true||v?.local?.liveAccess===false||v?.local?.accessStatus==='expired')return {operating:'expired',group:'expired',gps:'Renewal required',ignition:null,engine:null,speed:null,age:Infinity,fresh:false};
  const p=v?.position,a=p?.attributes||{},observedIgnition=bool(a.ignition??a.ignitionOn??v?.ignition),ignition=observedIgnition??bool(v?.telemetry?.stopIgnition??v?.telemetry?.ignition),motion=bool(a.motion??a.movement??v?.motion);
@@ -21,7 +25,10 @@ export function mapStatus(v,settings={},now=Date.now()){
  // their older motion flag set after the vehicle has stopped, so only fall
  // back to that flag when the device did not report a speed at all.
  const moving=speed!==null?speed>minimum:motion===true;
- const operating=moving?'moving':ignition===true?'idle':'parked';
+ // R12 trackers can leave a stale speed/motion combination after stopping.
+ // Keep the display parked when that model explicitly reports ignition OFF.
+ // Movement is still calculated above for backend safety decisions.
+ const operating=isR12(v)&&ignition===false?'parked':moving?'moving':ignition===true?'idle':'parked';
  const hasPosition=finite(p?.latitude)&&finite(p?.longitude)&&Math.abs(Number(p.latitude))<=90&&Math.abs(Number(p.longitude))<=180;
  const requestedUntracked=Number(settings.untrackedMinutes);
  const configuredUntracked=Number.isFinite(requestedUntracked)&&requestedUntracked>0?requestedUntracked:15;
