@@ -42,3 +42,57 @@
 @media(prefers-reduced-motion:reduce){.superLiveSensors.hasSensorUpdate,.superLiveSensors.hasSensorUpdate .superSensorCount{animation:none}}
 .platformLiveMap .platform-cluster-marker-wrap{background:transparent!important;border:0!important}.platformLiveMap .platform-cluster-marker{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#0b9955;color:#fff;border:3px solid #fff;box-shadow:0 4px 14px rgba(14,91,61,.35),0 0 0 5px rgba(12,163,99,.18);font-size:13px;font-weight:800;transition:transform .18s ease,box-shadow .18s ease}.platformLiveMap .platform-cluster-marker:hover{transform:scale(1.08);box-shadow:0 6px 18px rgba(14,91,61,.42),0 0 0 7px rgba(12,163,99,.2)}.platformLiveMap .platform-cluster-popup{display:grid;gap:4px;min-width:150px;color:#24425f}.platformLiveMap .platform-cluster-popup b{font-size:12px}.platformLiveMap .platform-cluster-popup small{font-size:10px;line-height:1.35}
 .companyMapParity .pmControls button.active{background:#eafaf1!important;color:#079d55!important;border-color:#70cda0!important}
+
+/* Keep the Super Admin map list visually identical to the Company Admin fleet cards. */
+.companyMapParity .pmVehicleRows{display:grid;gap:7px;margin:0 0 8px}
+.companyMapParity .pmVehicle{position:relative;display:grid;grid-template-columns:64px minmax(0,1fr) 98px;gap:9px;align-items:center;width:100%;min-height:88px;margin:0;padding:10px 34px 10px 8px;border:1px solid #e2e9ed;border-radius:10px;background:#fff;box-shadow:0 2px 8px #173a5610;color:#29486e;text-align:left;overflow:visible}
+.companyMapParity .pmVehicle[data-state=moving]{background:#f0faf5;border-color:#cfe8da}
+.companyMapParity .pmVehicle[data-state=idle]{background:#fff7eb;border-color:#f0dfc3}
+.companyMapParity .pmVehicle[data-state=parked]{background:#eff8ff;border-color:#cde7f6}
+.companyMapParity .pmVehicle[data-state=offline]{background:#fff1f2;border-color:#fecdd3}
+.companyMapParity .pmVehicle[data-state=untracked]{background:#fff1f4;border-color:#f4cbd3}
+.companyMapParity .pmVehicle:hover,.companyMapParity .pmVehicle.selected{border-color:#0ca363;background:#f4fcf7;box-shadow:inset 0 0 0 1px #0ca363,0 3px 10px #173a5612}
+.companyMapParity .pmVehicleImage{width:64px;height:52px;padding:0;border:0;border-radius:0;background:transparent;overflow:hidden}
+.companyMapParity .pmVehicleImage img{width:64px;height:50px;max-width:64px;max-height:50px;object-fit:contain;mix-blend-mode:multiply}
+.companyMapParity .pmVehicleImage svg{width:54px;height:50px;background:transparent}
+.companyMapParity .pmVehicleIdentity{min-width:0}
+.companyMapParity .pmVehicleIdentity b{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;min-width:0;overflow:visible;font-size:13px;line-height:1.3;white-space:normal;color:#214163}
+.companyMapParity .pmVehicleIdentity b::after{display:inline-flex;align-items:center;min-height:18px;padding:2px 7px;border-radius:7px;font-size:9px;font-weight:700;line-height:1;white-space:nowrap}
+.companyMapParity .pmVehicle[data-state=moving] .pmVehicleIdentity b::after{content:'Online';color:#078a4d;background:#dff6e9}
+.companyMapParity .pmVehicle[data-state=idle] .pmVehicleIdentity b::after{content:'Idle';color:#a66905;background:#fff0d2}
+.companyMapParity .pmVehicle[data-state=parked] .pmVehicleIdentity b::after{content:'Parked';color:#2378d0;background:#e2f0ff}
+.companyMapParity .pmVehicle[data-state=offline] .pmVehicleIdentity b::after{content:'Offline';color:#c43a45;background:#f0f2f4}
+.companyMapParity .pmVehicle[data-state=untracked] .pmVehicleIdentity b::after{content:'Currently Untracked';color:#e23e57;background:#ffe2e7}
+.companyMapParity .pmVehicleIdentity small{display:block;max-width:none;overflow:visible;text-overflow:clip;white-space:normal;font-size:10px;line-height:1.5;color:#71869a}
+.companyMapParity .pmVehicleIdentity small+small{color:#71869a}
+.companyMapParity .pmVehicleState{display:flex;min-width:0;flex-direction:column;align-items:flex-end;justify-content:center;gap:2px;text-align:right}
+.companyMapParity .pmVehicleState .stopSince{display:flex;justify-content:flex-end;gap:4px;font-size:10px;white-space:nowrap}
+.companyMapParity .pmVehicleState .stopSince>span{display:none}
+.companyMapParity .pmVehicleState strong{display:block;color:#183b59;font-size:13px;line-height:1.35;font-weight:700;white-space:nowrap}
+.companyMapParity .pmVehicleState small{font-size:9px;line-height:1.35;color:#71869a;white-space:nowrap}
+
+/* Use the same wide, four-card live vehicle popup treatment as Company Admin. */
+.companyMapParity .liveVehiclePanel{border-radius:12px;background:#fff;box-shadow:0 14px 38px rgba(19,52,68,.2)}
+.companyMapParity .liveVehiclePanelHeader{min-height:68px;padding:10px 16px;border-bottom:1px solid #e7eef1}
+.companyMapParity .liveVehiclePanelTitle{gap:9px}
+.companyMapParity .liveVehiclePanelTitle>strong{font-size:18px;max-width:420px;overflow:visible;text-overflow:clip;white-space:normal}
+.companyMapParity .liveVehiclePanelStatus{min-height:26px;box-sizing:border-box;display:inline-flex;align-items:center;gap:7px;padding:4px 9px;border:1px solid currentColor;border-radius:999px;background:#fff;font-size:11px;font-weight:700;line-height:1;white-space:nowrap}
+.companyMapParity .liveVehiclePanelGrid{grid-template-columns:1fr 1.25fr 1.15fr 1.15fr;gap:12px;padding:14px}
+.companyMapParity .livePanelCard{min-width:0;border:1px solid #dfe9ee;border-radius:11px;background:#fff;overflow:hidden}
+.companyMapParity .livePanelCard h3{min-height:38px;display:flex;align-items:center;gap:8px;margin:0;padding:0 12px;border-bottom:1px solid #e9eff2;color:#173b57;font-size:12px}
+.companyMapParity .livePanelCard h3 svg{width:17px;height:17px;color:#10a961}
+.companyMapParity .livePanelVehicleCard{display:flex;flex-direction:column;padding:10px 12px}
+.companyMapParity .livePanelVehicleCard h3{min-height:auto;padding:0 0 8px;border:0;font-size:17px;overflow:visible;white-space:normal}
+.companyMapParity .livePanelVehicleImage{height:82px;display:grid;place-items:center;margin-bottom:8px;border-top:1px solid #eef2f4;border-bottom:1px solid #eef2f4}
+.companyMapParity .livePanelVehicleImage img{width:100px;height:70px;object-fit:contain}
+.companyMapParity .livePanelVehicleImage svg{width:52px;height:52px;color:#1a86e9}
+.companyMapParity .livePanelTags{display:flex;gap:7px;margin-top:9px}
+.companyMapParity .livePanelTags span{flex:1;min-width:0;padding:6px;border:1px solid #edf1f3;border-radius:7px;background:#f8fafb;text-align:center;color:#557086;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.companyMapParity .livePanelCard dl{margin:0;padding:0 12px}
+.companyMapParity .livePanelCard dl>div{min-height:35px;display:grid;grid-template-columns:102px minmax(0,1fr);align-items:center;gap:8px;border-bottom:1px solid #edf1f3}
+.companyMapParity .livePanelCard dt{color:#6b8195;font-size:11px}
+.companyMapParity .livePanelCard dd{min-width:0;margin:0;color:#173b57;font-size:11px;font-weight:700;text-align:right;overflow:visible;text-overflow:clip;white-space:normal}
+.companyMapParity .livePanelCard dd .addressDisplay{display:block;width:100%;max-width:none;white-space:normal;text-align:right;overflow-wrap:anywhere}
+.companyMapParity .livePanelSensorScroll{max-height:178px;overflow-y:auto}
+.companyMapParity .livePanelStreet .liveStreetPreview{height:76px;margin:10px 10px 7px}
+.companyMapParity .livePanelStreet>a,.companyMapParity .liveStreetUnavailable{display:block;padding:0 11px 11px;color:#0878dd;font-size:11px;font-weight:700;text-decoration:none}
