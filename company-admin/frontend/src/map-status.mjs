@@ -33,10 +33,10 @@ export function mapStatus(v,settings={},now=Date.now()){
  const requestedUntracked=Number(settings.untrackedMinutes);
  const configuredUntracked=Number.isFinite(requestedUntracked)&&requestedUntracked>0?requestedUntracked:15;
  const untrackedAfterMs=Math.min(offlineMs,configuredUntracked*60000);
- // Once communication is stale, do not keep showing the last operating state
- // (for example Moving from the final packet before a server handover).
- // A current packet is required before showing Moving, Idle, or Parked.
- const group=!received.length?'never':age>=offlineMs||age>=untrackedAfterMs?'offline':operating;
+ // R12 is the exception: after a server handover, its final movement packet
+ // should become Offline rather than remaining Moving or Untracked. Other
+ // trackers retain the established Untracked grace period.
+ const group=!received.length?'never':isR12(v)&&age>=untrackedAfterMs?'offline':age>=offlineMs?'offline':age>=untrackedAfterMs?'untracked':operating;
  const gps=p?.valid===false||(Number.isFinite(fixAge)&&fixAge>Math.max(1,Number(settings.noSignalMinutes)||5)*60000)?'No GPS Signal':hasPosition?'GPS available':'No position received';
  return {operating,group,gps,ignition,engine:engineState(p,now),speed:freshSample?speed:null,age,fresh:freshSample};
 }

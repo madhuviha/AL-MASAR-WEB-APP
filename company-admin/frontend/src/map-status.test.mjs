@@ -15,16 +15,22 @@ test('a last-known invalid GPS position remains classifiable and visible',()=>{
  assert.equal(status.group,'parked');
 });
 
-test('stale communication is Offline instead of retaining the last operating state',()=>{
+test('stale communication keeps the established Untracked state for non-R12 trackers',()=>{
  const now=Date.now();
  const status=mapStatus({device:{lastUpdate:new Date(now-16*60000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-16*60000).toISOString(),fixTime:new Date(now-16*60000).toISOString(),speed:0,attributes:{ignition:false}}},{offlineMinutes:300},now);
- assert.equal(status.group,'offline');
+ assert.equal(status.group,'untracked');
 });
 
 test('a recent R12 zero-speed packet remains Parked',()=>{
  const now=Date.now();
  const status=mapStatus({protocol:'GT06',deviceModel:'R12',device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:0,attributes:{ignition:false,motion:false}}},{offlineMinutes:300},now);
  assert.equal(status.group,'parked');
+});
+
+test('a stale R12 packet becomes Offline after the handover timeout',()=>{
+ const now=Date.now();
+ const status=mapStatus({protocol:'GT06',deviceModel:'R12',device:{lastUpdate:new Date(now-16*60000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-16*60000).toISOString(),speed:8/1.852,attributes:{ignition:false,motion:true}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'offline');
 });
 
 test('a stopped vehicle with ignition on remains Idle',()=>{
