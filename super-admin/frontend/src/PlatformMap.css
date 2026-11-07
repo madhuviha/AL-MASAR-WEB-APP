@@ -52,6 +52,7 @@
 .companyMapParity .pmVehicle[data-state=offline]{background:#fff1f2;border-color:#fecdd3}
 .companyMapParity .pmVehicle[data-state=untracked]{background:#fff1f4;border-color:#f4cbd3}
 .companyMapParity .pmVehicle:hover,.companyMapParity .pmVehicle.selected{border-color:#0ca363;background:#f4fcf7;box-shadow:inset 0 0 0 1px #0ca363,0 3px 10px #173a5612}
+.companyMapParity .pmVehicle::after{content:'⋮';position:absolute;right:7px;top:50%;transform:translateY(-50%);width:22px;height:32px;display:grid;place-items:center;color:#15344d;font-size:24px;line-height:1;font-weight:800;pointer-events:none}
 .companyMapParity .pmVehicleImage{width:64px;height:52px;padding:0;border:0;border-radius:0;background:transparent;overflow:hidden}
 .companyMapParity .pmVehicleImage img{width:64px;height:50px;max-width:64px;max-height:50px;object-fit:contain;mix-blend-mode:multiply}
 .companyMapParity .pmVehicleImage svg{width:54px;height:50px;background:transparent}
