@@ -97,3 +97,39 @@
 .companyMapParity .livePanelSensorScroll{max-height:178px;overflow-y:auto}
 .companyMapParity .livePanelStreet .liveStreetPreview{height:76px;margin:10px 10px 7px}
 .companyMapParity .livePanelStreet>a,.companyMapParity .liveStreetUnavailable{display:block;padding:0 11px 11px;color:#0878dd;font-size:11px;font-weight:700;text-decoration:none}
+
+/* The Super Admin list now uses the same semantic card markup as Company Admin. */
+.companyMapParity .mapVehicleRow{position:relative;display:block;margin:0 0 7px;border:1px solid #e2e9ed;border-radius:10px;background:#fff;box-shadow:0 2px 8px #173a5610;overflow:visible}
+.companyMapParity .mapVehicleRow[data-state=moving]{background:#f0faf5;border-color:#cfe8da}
+.companyMapParity .mapVehicleRow[data-state=idle]{background:#fff7eb;border-color:#f0dfc3}
+.companyMapParity .mapVehicleRow[data-state=parked]{background:#eff8ff;border-color:#cde7f6}
+.companyMapParity .mapVehicleRow[data-state=offline]{background:#fff1f2;border-color:#fecdd3}
+.companyMapParity .mapVehicleRow[data-state=untracked]{background:#fff1f4;border-color:#f4cbd3}
+.companyMapParity .mapVehicleRow.selected{box-shadow:inset 0 0 0 1px #0ca363,0 3px 10px #173a5612}
+.companyMapParity .mapVehicleMain{position:relative;width:100%;min-height:88px;margin:0!important;padding:10px 42px 10px 10px!important;border:0!important;border-radius:10px!important;background:transparent!important;box-shadow:none!important;display:grid!important;grid-template-columns:64px minmax(0,1fr) 105px;gap:9px;align-items:center;text-align:left;color:#29486e}
+.companyMapParity .mapVehicleMain:hover{background:#ffffff60!important}
+.companyMapParity .mapVehicleMain>span{min-width:0}
+.companyMapParity .mapVehicleMain .catIcon{width:64px;height:50px;padding:0;border:0;border-radius:0;background:transparent;overflow:hidden}
+.companyMapParity .mapVehicleMain .catIcon img{width:64px;height:48px;max-width:64px;max-height:48px;object-fit:contain;mix-blend-mode:multiply}
+.companyMapParity .mapVehicleMain .catIcon svg{width:54px;height:50px;background:transparent}
+.companyMapParity .mapVehicleIdentity{min-width:0}
+.companyMapParity .mapVehicleIdentity>b{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;min-width:0;color:#214163;font-size:13px;line-height:1.3;white-space:normal}
+.companyMapParity .mapVehicleName{min-width:0;overflow-wrap:anywhere;white-space:normal}
+.companyMapParity .mapVehicleBadge{display:inline-flex;align-items:center;flex:0 0 auto;min-height:18px;margin:0;padding:3px 7px;border-radius:7px;font-style:normal;font-size:9px;line-height:1;white-space:nowrap}
+.companyMapParity .mapVehicleRow[data-state=moving] .mapVehicleBadge{color:#078a4d;background:#dff6e9}
+.companyMapParity .mapVehicleRow[data-state=idle] .mapVehicleBadge{color:#a66905;background:#fff0d2}
+.companyMapParity .mapVehicleRow[data-state=parked] .mapVehicleBadge{color:#2378d0;background:#e2f0ff}
+.companyMapParity .mapVehicleRow[data-state=offline] .mapVehicleBadge{color:#c43a45;background:#f0f2f4}
+.companyMapParity .mapVehicleRow[data-state=untracked] .mapVehicleBadge{color:#e23e57;background:#ffe2e7}
+.companyMapParity .mapVehicleIdentity small{display:block;max-width:none;overflow:visible;text-overflow:clip;white-space:normal;color:#71869a;font-size:10px;line-height:1.5}
+.companyMapParity .mapVehicleUpdated{color:#1683df!important}
+.companyMapParity .mapVehicleState{display:flex;min-width:0;flex-direction:column;align-items:flex-end;justify-content:center;gap:2px;text-align:right}
+.companyMapParity .mapRowSpeed{display:block;color:#183b59;font-size:13px;line-height:1.35;font-weight:700;white-space:nowrap}
+.companyMapParity .mapRowSpeed small{font-size:10px;color:#71869a}
+.companyMapParity .mapVehicleSignals{display:flex;justify-content:flex-end;min-height:23px}
+.companyMapParity .mapVehicleState>small{font-size:9px;line-height:1.35;color:#71869a;white-space:nowrap}
+.companyMapParity .mapVehicleMore{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;width:28px;height:38px;padding:0;border:0;border-radius:7px;background:transparent;color:#15344d;z-index:12}
+.companyMapParity .mapVehicleMore:hover{background:#fff;color:#087e4a;box-shadow:0 2px 8px #18384e1c}
+.companyMapParity .mapVehicleMore>.actionDots{display:flex;width:9px;height:23px;margin:auto;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.companyMapParity .mapVehicleMore>.actionDots>b{display:block;width:5px;height:5px;flex:0 0 5px;border-radius:50%;background:currentColor}
+@media(max-width:700px){.companyMapParity .mapVehicleMain{grid-template-columns:54px minmax(0,1fr);padding-right:42px!important}.companyMapParity .mapVehicleState{grid-column:2;align-items:flex-start;text-align:left}.companyMapParity .mapVehicleSignals{justify-content:flex-start}}
