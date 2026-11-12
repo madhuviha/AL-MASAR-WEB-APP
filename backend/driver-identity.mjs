@@ -50,6 +50,18 @@ export function identifierAliases(value,type='DRIVER_ID'){
  }
  return [...out];
 }
+/** Include Teltonika 1-Wire ROM byte order variants for the same physical card. */
+export function oneWireIdentifierAliases(value){
+ const out=new Set(identifierAliases(value,'IBUTTON'));
+ for(const candidate of [...out]){
+  const compact=String(candidate).trim().toUpperCase().replace(/^0X/,'').replace(/[\s:_-]/g,'');
+  if(!compact||compact.length>16||compact.length%2||!/^[0-9A-F]+$/.test(compact))continue;
+  const bytes=compact.padStart(16,'0').match(/.{2}/g);
+  if(!bytes)continue;
+  addHexAliases(out,bytes.reverse().join(''));
+ }
+ return [...out];
+}
 export function driverIdentifiers(driver){
  if(driver.identifiers!==undefined&&!Array.isArray(driver.identifiers))throw Error('Driver identifiers must be a list.');
  const rows=Array.isArray(driver.identifiers)?driver.identifiers:

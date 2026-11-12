@@ -1,0 +1,79 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {latestCommunicationTime,mapStatus} from './map-status.mjs';
+
+test('expired access is always classified as renewal required',()=>{
+ const status=mapStatus({accessStatus:'expired',position:null},{},Date.now());
+ assert.equal(status.group,'expired');
+ assert.equal(status.gps,'Renewal required');
+});
+
+test('a last-known invalid GPS position remains classifiable and visible',()=>{
+ const now=Date.now();
+ const status=mapStatus({device:{lastUpdate:new Date(now-60000).toISOString()},position:{valid:false,latitude:25.2891283,longitude:51.5383316,serverTime:new Date(now-3600000).toISOString(),fixTime:new Date(now-3600000).toISOString(),speed:null,attributes:{}}},{offlineMinutes:300},now);
+ assert.equal(status.gps,'No GPS Signal');
+ assert.equal(status.group,'parked');
+});
+
+test('stale communication keeps the established Untracked state for non-R12 trackers',()=>{
+ const now=Date.now();
+ const status=mapStatus({device:{lastUpdate:new Date(now-16*60000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-16*60000).toISOString(),fixTime:new Date(now-16*60000).toISOString(),speed:0,attributes:{ignition:false}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'untracked');
+});
+
+test('a recent R12 zero-speed packet remains Parked',()=>{
+ const now=Date.now();
+ const status=mapStatus({protocol:'GT06',deviceModel:'R12',device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:0,attributes:{ignition:false,motion:false}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'parked');
+});
+
+test('a stale R12 packet becomes Offline after the handover timeout',()=>{
+ const now=Date.now();
+ const status=mapStatus({protocol:'GT06',deviceModel:'R12',device:{lastUpdate:new Date(now-16*60000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-16*60000).toISOString(),speed:8/1.852,attributes:{ignition:false,motion:true}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'offline');
+});
+
+test('a stopped vehicle with ignition on remains Idle',()=>{
+ const now=Date.now();
+ const status=mapStatus({device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:0,attributes:{ignition:'true'}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'idle');
+});
+
+test('ignition from the vehicle snapshot is used when position attributes are empty',()=>{
+ const now=Date.now();
+ const status=mapStatus({ignition:true,device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:0,attributes:{}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'idle');
+});
+
+test('last confirmed ignition is retained when a heartbeat omits ignition',()=>{
+ const now=Date.now();
+ const status=mapStatus({device:{lastUpdate:new Date(now-30000).toISOString()},telemetry:{stopIgnition:true},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:0,attributes:{}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'idle');
+});
+
+test('zero speed is authoritative over a stale motion flag',()=>{
+ const now=Date.now();
+ const status=mapStatus({device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:0,attributes:{ignition:false,motion:true}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'parked');
+});
+
+test('R12 display stays Parked when ignition is OFF despite stale speed and motion',()=>{
+ const now=Date.now();
+ const status=mapStatus({protocol:'GT06',deviceModel:'R12',device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:8/1.852,attributes:{ignition:false,motion:true}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'parked');
+ assert.equal(status.operating,'parked');
+ assert.equal(status.speed,8);
+});
+
+test('H9 keeps moving display for the same raw packet',()=>{
+ const now=Date.now();
+ const status=mapStatus({protocol:'GT06',deviceModel:'H9',device:{lastUpdate:new Date(now-30000).toISOString()},position:{valid:true,latitude:25.2,longitude:51.5,serverTime:new Date(now-30000).toISOString(),speed:8/1.852,attributes:{ignition:false,motion:true}}},{offlineMinutes:300},now);
+ assert.equal(status.group,'moving');
+});
+
+test('latest communication prefers a fresh heartbeat over an older GPS position',()=>{
+ const now=Date.now();
+ const heartbeat=new Date(now-3*60000).toISOString();
+ const positionTime=new Date(now-4*60*60000).toISOString();
+ assert.equal(latestCommunicationTime({device:{lastUpdate:heartbeat},position:{serverTime:positionTime}}),heartbeat);
+});

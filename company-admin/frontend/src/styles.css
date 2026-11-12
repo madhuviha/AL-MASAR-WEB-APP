@@ -55,3 +55,426 @@
   white-space:normal!important;
   overflow-wrap:anywhere;
 }
+/* School / Parent Bus layout: keep summary cards and page controls aligned. */
+.schoolPage .pageHead{align-items:center;margin-bottom:20px}
+.schoolPage .schoolRefresh{min-width:112px;justify-content:center}
+.schoolPage .schoolSummaryGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:0 0 20px}
+.schoolPage .schoolSummaryCard{min-height:126px;padding:18px 20px;display:flex;flex-direction:column;justify-content:center;box-shadow:0 8px 18px rgba(49,82,122,.06)}
+.schoolPage .schoolSummaryCard small{color:#607997;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.schoolPage .schoolSummaryCard h2{margin:10px 0 4px;color:#0b1738;font-size:30px;line-height:1;font-weight:650}
+.schoolPage .schoolSummaryCard p{margin:0;color:#7187a0;font-size:12px}
+.schoolPage .schoolDataStack{display:grid;gap:16px}
+.schoolPage .schoolDataCard{padding:20px;min-width:0}
+.schoolPage .schoolDataCard>h2{margin:0 0 16px;color:#0b1738;font-size:18px}
+.schoolPage .tableWrap{width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+.schoolPage .tableWrap table{min-width:620px}
+.schoolPage .tableWrap td small{display:block;margin-top:3px;color:#7b8ea5;font-size:10px}
+@media(max-width:900px){.schoolPage .schoolSummaryGrid{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.schoolPage .pageHead{align-items:flex-start;flex-direction:column;gap:12px}.schoolPage .headActions{width:100%}.schoolPage .schoolRefresh{width:100%}.schoolPage .schoolSummaryGrid{grid-template-columns:1fr}.schoolPage .schoolDataCard{padding:14px}}
+.schoolPage .schoolHeaderActions{flex-wrap:wrap;justify-content:flex-end}
+.schoolPage .schoolHeaderActions button{white-space:nowrap}
+.schoolPage .schoolCardHeading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.schoolPage .schoolCardHeading h2{margin:0;color:#0b1738;font-size:18px}
+.schoolPage .schoolCardHeading p{margin:5px 0 0;color:#7187a0;font-size:12px}
+.schoolPage .schoolCardHeading>button,.schoolPage .schoolInlineActions button,.schoolPage .schoolRowAction{height:36px;border:1px solid var(--line);background:#fff;border-radius:7px;color:#294b70;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+.schoolPage .schoolCardHeading>button svg,.schoolPage .schoolInlineActions svg,.schoolPage .schoolRowAction svg{width:15px}
+.schoolPage .schoolCardHeading>button.primary,.schoolPage .schoolInlineActions button.primary{color:#fff}
+.schoolPage .schoolInlineActions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.schoolPage .schoolRowAction{height:30px;padding:0 9px;font-size:11px}
+.schoolPage .schoolFormGrid{padding:20px}
+.schoolPage .schoolChildChoices{display:grid;gap:8px;max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:9px;background:#fbfdfe}
+.schoolPage .schoolChildChoices label{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px;border-radius:6px;background:#fff;border:1px solid #edf2f6;font-size:12px;color:#294b70}
+.schoolPage .schoolChildChoices label:hover{border-color:#b8dec9;background:#f4fbf7}
+.schoolPage .schoolChildChoices input{width:auto}
+.schoolPage .schoolChildChoices small{color:#7b8ea5;font-size:10px}
+.schoolPage .schoolNotificationChoices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
+.schoolPage .schoolNotificationChoices label{min-width:0;min-height:38px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cfdeed;border-radius:7px;background:#f7faff;font-size:12px;color:#294b70;cursor:pointer}
+.schoolPage .schoolNotificationChoices label:hover{border-color:#08a85d;background:#f2fbf6}
+.schoolPage .schoolNotificationChoices label span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:650}
+.schoolPage .schoolNotificationChoices input{flex:0 0 16px;width:16px;height:16px;margin:0;accent-color:#08a85d}
+.schoolPage .schoolNotificationChoices small{display:none}
+@media(max-width:620px){.schoolPage .schoolNotificationChoices{grid-template-columns:1fr}}
+.schoolPage .schoolTableHint{color:#7b8ea5;font-size:11px}
+@media(max-width:760px){.schoolPage .schoolCardHeading{flex-direction:column}.schoolPage .schoolInlineActions{width:100%;justify-content:flex-start}.schoolPage .schoolHeaderActions{justify-content:flex-start}.schoolPage .schoolHeaderActions button{flex:1}}
+.schoolPage .schoolBusChooser{padding:4px 0 0}
+.schoolPage .schoolBusChooserTop{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 20px 16px;border-bottom:1px solid var(--line)}
+.schoolPage .schoolBusChooserTop h3{margin:0;color:#0b1738;font-size:18px}
+.schoolPage .schoolBusChooserTop p{margin:4px 0 0;color:#7187a0;font-size:12px}
+.schoolPage .schoolBusChooserTop>button{height:36px;border:1px solid var(--line);border-radius:7px;background:#fff;color:#294b70;padding:0 12px;white-space:nowrap}
+.schoolPage .schoolBusList{display:grid;gap:8px;max-height:360px;overflow:auto;padding:16px 20px 20px}
+.schoolPage .schoolBusOption{width:100%;display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#294b70;text-align:left}
+.schoolPage .schoolBusOption:hover{border-color:#1caf66;background:#f4fbf7}
+.schoolPage .schoolBusOption b,.schoolPage .schoolBusOption small{display:block;min-width:0}
+.schoolPage .schoolBusOption b{overflow-wrap:anywhere}
+.schoolPage .schoolBusOption small{margin-top:3px;color:#7b8ea5;font-size:10px;overflow-wrap:anywhere}
+.schoolPage .schoolBusIcon{width:32px;height:32px;border-radius:8px;background:#e9f9f0;color:#0c9b59;display:grid;place-items:center}
+.schoolPage .schoolBusIcon svg{width:17px}
+.schoolPage .schoolBusChoose{font-size:11px;color:#078b4d;font-weight:700}
+.schoolPage .schoolBusCreateForm .formGrid{padding:20px}
+@media(max-width:620px){.schoolPage .schoolBusChooserTop{align-items:flex-start;flex-direction:column}.schoolPage .schoolBusChooserTop>button{width:100%}}
+.schoolPage .schoolSelectedBus{display:flex;align-items:center;gap:14px;margin:0 0 20px;padding:14px 18px;border-left:4px solid var(--green);box-shadow:0 8px 18px rgba(49,82,122,.06)}
+.schoolPage .schoolSelectedBusInfo{min-width:0;flex:1}
+.schoolPage .schoolSelectedBusInfo small{display:block;color:#078b4d;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.schoolPage .schoolSelectedBusInfo h2{margin:3px 0 2px;color:#0b1738;font-size:18px;overflow-wrap:anywhere}
+.schoolPage .schoolSelectedBusInfo p{margin:0;color:#7187a0;font-size:11px;overflow-wrap:anywhere}
+.schoolPage .schoolSelectedBusActions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.schoolPage .schoolSelectedBusActions button{height:34px;border:1px solid var(--line);border-radius:7px;background:#fff;color:#294b70;padding:0 10px;display:inline-flex;align-items:center;gap:6px;font-size:11px}
+.schoolPage .schoolSelectedBusActions button:hover{border-color:#1caf66;background:#f4fbf7}
+.schoolPage .schoolSelectedBusActions svg{width:14px}
+.schoolGeoSide{position:fixed;z-index:2100;top:90px;right:18px;width:min(410px,calc(100vw - 36px));max-height:calc(100vh - 112px);display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 22px 60px rgba(21,48,73,.24);overflow:hidden}
+.schoolGeoSideHead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 18px 14px;border-bottom:1px solid var(--line)}
+.schoolGeoSideHead h3{margin:0;color:#0b1738;font-size:18px}
+.schoolGeoSideHead p{margin:5px 0 0;color:#7187a0;font-size:11px;line-height:1.45}
+.schoolGeoSideHead>button{width:30px;height:30px;border:1px solid var(--line);border-radius:7px;background:#fff;color:#537092;display:grid;place-items:center}
+.schoolGeoSideHead>button svg{width:16px}
+.schoolGeoSideBody{display:grid;gap:8px;overflow:auto;padding:14px 16px;min-height:130px}
+.schoolGeoRow{display:grid;grid-template-columns:12px minmax(0,1fr) auto;align-items:center;gap:9px;padding:11px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.schoolGeoRow:hover{border-color:#b8dec9;background:#f7fcf9}
+.schoolGeoDot{width:9px;height:9px;border-radius:50%;background:#1caf66;box-shadow:0 0 0 3px #e4f7ec}
+.schoolGeoDot.inactive{background:#98a6b0;box-shadow:0 0 0 3px #eef1f3}
+.schoolGeoRowInfo{min-width:0}
+.schoolGeoRowInfo b,.schoolGeoRowInfo small{display:block;overflow-wrap:anywhere}
+.schoolGeoRowInfo b{color:#294b70;font-size:12px}
+.schoolGeoRowInfo small{margin-top:3px;color:#7b8ea5;font-size:10px}
+.schoolGeoRowActions{display:flex;gap:4px}
+.schoolGeoRowActions button{width:28px;height:28px;border:1px solid var(--line);border-radius:6px;background:#fff;color:#496786;display:grid;place-items:center}
+.schoolGeoRowActions button:hover{color:#078b4d;border-color:#9ad6b5}
+.schoolGeoRowActions svg{width:14px}
+.schoolGeoSideFoot{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
+.schoolGeoSideFoot button{height:36px;border:1px solid var(--line);border-radius:7px;background:#fff;color:#294b70;padding:0 13px;display:inline-flex;align-items:center;gap:6px}
+.schoolGeoSideFoot button.primary{color:#fff}
+.schoolGeoSideFoot svg{width:15px}
+@media(max-width:760px){.schoolPage .schoolSelectedBus{align-items:flex-start;flex-wrap:wrap}.schoolPage .schoolSelectedBusActions{width:100%;justify-content:flex-start}.schoolGeoSide{top:76px;right:10px;width:calc(100vw - 20px);max-height:calc(100vh - 88px)}}
+.schoolPage .schoolLocationField{position:relative}
+.schoolPage .schoolLocationInput{position:relative}
+.schoolPage .schoolLocationInput input{padding-right:88px}
+.schoolPage .schoolLocationBusy{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#7187a0;font-size:10px;pointer-events:none}
+.schoolPage .schoolLocationResults{position:absolute;z-index:8;left:0;right:0;top:calc(100% + 3px);display:grid;max-height:220px;overflow:auto;border:1px solid #c9d8e5;border-radius:7px;background:#fff;box-shadow:0 10px 24px rgba(26,58,84,.16)}
+.schoolPage .schoolLocationResults{max-height:180px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;-webkit-overflow-scrolling:touch}
+.schoolPage .schoolLocationActions{display:flex;justify-content:flex-end;margin-top:5px}
+.schoolPage .schoolMapChoice,.schoolPage .schoolMapButton{height:28px;border:1px solid #b9d7c7;border-radius:0;background:#f2fbf6;color:#087d4b;padding:0 9px;display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700}
+.schoolPage .schoolMapChoice:hover,.schoolPage .schoolMapButton:hover{border-color:#0da15b;background:#e6f8ee}
+.schoolPage .schoolMapChoice svg,.schoolPage .schoolMapButton svg{width:13px;height:13px}
+.schoolPage .schoolMapButton:disabled{opacity:.5;cursor:not-allowed}
+.school-location-marker-wrap{background:transparent!important;border:0!important}
+.school-location-marker-label{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 7px;border:1px solid #cbd9e5;background:#fff;color:#173d63;font-size:10px;font-weight:800;text-align:center;box-shadow:0 3px 10px rgba(21,48,73,.16)}
+.school-location-marker{width:30px;height:30px;margin:2px auto 0;border:2px solid #fff;display:grid;place-items:center;font-size:16px;line-height:1;box-shadow:0 3px 10px rgba(21,48,73,.25)}
+.school-location-marker.school{background:#0da15b}.school-location-marker.home{background:#2587ef}
+.schoolPage .schoolLocationResults button{display:flex;align-items:flex-start;gap:7px;width:100%;padding:9px 10px;border:0;border-bottom:1px solid #edf2f6;background:#fff;color:#294b70;text-align:left;font-size:11px;line-height:1.35}
+.schoolPage .schoolLocationResults button:last-child{border-bottom:0}
+.schoolPage .schoolLocationResults button:hover{background:#f2faf6;color:#087d4b}
+.schoolPage .schoolLocationResults svg,.schoolPage .schoolCoordinateChoice svg{width:14px;min-width:14px;margin-top:1px;color:#0c9b59}
+.schoolPage .schoolLocationError{display:block;margin-top:4px;color:#d14b51;font-size:10px}
+.schoolPage .schoolCoordinateChoice{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:5px 8px;border:1px solid #b9dfca;border-radius:6px;background:#f2fbf6;color:#078b4d;font-size:10px}
+.schoolPage .schoolLocationHint{display:block;margin-top:5px;color:#7b8ea5;font-size:10px;line-height:1.35}
+.schoolPage .formError{margin:14px 20px 0;padding:10px 12px;border:1px solid #f2c7ca;border-radius:7px;background:#fff1f2;color:#c43e48;font-size:11px}
+.schoolPage .schoolActionButton{height:40px!important;display:inline-flex!important;align-items:center;justify-content:center;gap:8px;padding:0 14px!important;border:1px solid #0da15b!important;border-radius:8px!important;background:linear-gradient(180deg,#17b56b,#0da15b)!important;color:#fff!important;font-weight:700;box-shadow:0 4px 10px rgba(13,161,91,.16)}
+.schoolPage .schoolActionButton:hover{background:linear-gradient(180deg,#20c476,#0a9652)!important;border-color:#078b4d!important;transform:translateY(-1px)}
+.schoolPage .schoolActionButton:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
+.schoolPage .schoolActionButton svg{width:17px;height:17px}
+.schoolBusModal{width:min(860px,96vw)!important;max-height:90vh!important;border-radius:0!important;box-shadow:0 24px 70px rgba(18,50,78,.28)!important}
+.schoolBusModal button,.schoolBusModal input,.schoolBusModal select,.schoolBusModal textarea{border-radius:0!important}
+.schoolBusModal .modalHead{padding:18px 22px;background:#fff}
+.schoolBusModal .modalHead h2{font-size:21px;letter-spacing:-.01em}
+.schoolBusModal .modalBody{padding:0}
+.schoolBusModal .schoolBusChooser{padding:0}
+.schoolBusModal .schoolBusChooserTop{padding:18px 22px;background:#f6fafc;border-bottom:1px solid var(--line)}
+.schoolBusModal .schoolBusChooserTop h3{font-size:19px}
+.schoolBusModal .schoolBusChooserTop>button{height:38px;padding:0 15px;border-color:#b9cddd;background:#fff;font-weight:700}
+.schoolBusModal .schoolBusList{gap:10px;padding:18px 22px 22px;background:#fff}
+.schoolBusModal .schoolBusOption{min-height:64px;padding:12px 14px;border-color:#cbd9e5;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease}
+.schoolBusModal .schoolBusOption:hover,.schoolBusModal .schoolBusOption:focus-visible{border-color:#10a45d;background:#f3fbf6;box-shadow:inset 3px 0 #10a45d;outline:0}
+.schoolBusModal .schoolBusIcon{border-radius:0!important}
+.schoolBusModal .schoolBusCreateForm{background:#fff}
+.schoolBusModal .schoolBusCreateForm .formGrid{padding:20px 22px 12px;gap:16px}
+.schoolBusModal .schoolBusCreateForm .profileHint{margin:0;padding:0 22px 18px;color:#6c829b;font-size:11px}
+.schoolBusModal .modalActions{padding:14px 22px;background:#f8fafc}
+.schoolBusModal .modalActions button{min-width:118px;font-weight:700}
+.schoolBusModal .modalActions .primary{min-width:172px}
+.cleanDriverForm{background:#fff}
+.cleanDriverFields{display:grid;grid-template-columns:1fr;gap:14px;padding:20px 22px 8px}
+.cleanDriverFields label{display:flex;flex-direction:column;gap:6px}
+.cleanDriverFields label>span{font-size:12px;color:#284769;font-weight:600}
+.cleanDriverFields input,.cleanDriverFields select,.cleanDriverFields textarea{width:100%;min-height:40px;border:1px solid var(--line);border-radius:0;background:#fafcfd;color:#234266;padding:10px;outline:0}
+.cleanDriverFields input:focus,.cleanDriverFields select:focus,.cleanDriverFields textarea:focus{border-color:#0ca45b;box-shadow:0 0 0 2px rgba(12,164,91,.12);background:#fff}
+.cleanDriverFields textarea{min-height:72px;resize:vertical}
+.cleanDriverForm .modalActions{padding:14px 22px;background:#f8fafc}
+.cleanDriverForm .modalActions button{min-width:100px;border-radius:0;font-weight:700}
+.cleanDriverForm .modalActions .primary{min-width:132px}
+.modal:has(.cleanDriverForm){border-radius:0!important}
+.modal:has(.cleanDriverForm) .modalHead{padding:18px 22px}
+.modal:has(.cleanDriverForm) .modalHead button{border-radius:0!important}
+/* Keep the whole School / Parent Bus module in the same simple rectangular style. */
+.schoolPage .card,.schoolPage .tableWrap,.schoolPage .schoolChildChoices,.schoolPage .schoolChildChoices label,.schoolPage .schoolBusOption,.schoolPage .schoolGeoRow,.schoolPage .schoolGeoSide,.schoolPage .schoolLocationResults{border-radius:0!important}
+.schoolPage .schoolActionButton,.schoolPage .schoolCardHeading>button,.schoolPage .schoolInlineActions button,.schoolPage .schoolRowAction,.schoolPage .schoolRefresh,.schoolPage .schoolGeoSide button,.schoolPage .modal button{border-radius:0!important}
+.schoolPage .modal{border-radius:0!important;box-shadow:0 20px 55px rgba(18,50,78,.24)!important}
+.schoolPage .modalHead{padding:18px 22px!important;background:#fff;border-bottom:1px solid var(--line)}
+.schoolPage .modalHead h2{font-size:20px}
+.schoolPage .modalBody{padding:0!important}
+.schoolPage .modal .formGrid,.schoolPage .modal .schoolFormGrid{grid-template-columns:1fr!important;gap:14px!important;padding:20px 22px 8px!important}
+.schoolPage .modal .formGrid>label,.schoolPage .modal .schoolLocationField,.schoolPage .modal .schoolChildChoices{width:100%}
+.schoolPage .modal .formGrid input,.schoolPage .modal .formGrid select,.schoolPage .modal .formGrid textarea{min-height:40px;border-radius:0!important;background:#fafcfd}
+.schoolPage .modal .formGrid input:focus,.schoolPage .modal .formGrid select:focus,.schoolPage .modal .formGrid textarea:focus{border-color:#0ca45b;box-shadow:0 0 0 2px rgba(12,164,91,.12);background:#fff}
+.schoolPage .modal .modalActions{padding:14px 22px;background:#f8fafc}
+.schoolPage .modal .modalActions button{min-width:100px;font-weight:700}
+.schoolPage .modal .modalActions .primary{min-width:132px}
+.schoolPage .schoolCardHeading{padding-bottom:2px}
+.schoolPage .schoolDataCard{box-shadow:0 5px 14px rgba(49,82,122,.06)}
+.schoolPage .schoolSummaryCard{box-shadow:0 5px 14px rgba(49,82,122,.06)}
+.schoolPage .schoolBusChooserTop{background:#f6fafc}
+.schoolPage .schoolBusCreateForm .formGrid{grid-template-columns:1fr!important}
+.schoolPage .schoolGeoSide{box-shadow:0 20px 55px rgba(21,48,73,.22)}
+.schoolBusModal:has(.schoolBusCreateForm) .schoolBusChooserTop{display:none!important}
+.schoolBusModal:has(.schoolBusCreateForm) .schoolBusCreateForm{border-top:0!important}
+.schoolBusAssignForm{background:#fff;padding:0 22px}
+.schoolBusAssignIntro{padding:18px 0 14px;border-bottom:1px solid var(--line)}
+.schoolBusAssignIntro h3{margin:0;color:#0b1738;font-size:19px}
+.schoolBusAssignIntro p{margin:4px 0 0;color:#7187a0;font-size:12px}
+.schoolBusAssignForm>.field{padding-top:20px}
+.schoolBusAssignForm>.profileHint{margin:8px 0 0;color:#6c829b;font-size:11px}
+.schoolBusAssignForm .modalActions{margin:18px -22px 0;padding:14px 22px;background:#f8fafc}
+.schoolBusAssignForm button,.schoolBusAssignForm select{border-radius:0!important}
+.schoolInlineBusAssign{margin:16px 0;border:1px solid #cbd9e5!important;background:#fff}
+.schoolInlineBusAssign .schoolBusAssignForm{padding:18px 20px 0}
+.schoolBusCreateForm{background:#fff}
+.schoolBusSelectorBlock{padding:22px;border-bottom:1px solid var(--line);background:#f7fafc}
+.schoolBusSelectorBlock label{display:flex;flex-direction:column;gap:6px}
+.schoolBusSelectorBlock label>span{font-size:12px;color:#284769;font-weight:700}
+.schoolBusSelectorBlock select{width:100%;min-height:44px;border:1px solid var(--line);border-radius:0;background:#fff;color:#234266;padding:10px;outline:0}
+.schoolBusSelectorBlock select:focus{border-color:#0ca45b;box-shadow:0 0 0 2px rgba(12,164,91,.12)}
+.schoolBusSelectorBlock p{margin:8px 0 0;color:#7187a0;font-size:11px}
+.schoolBusOverview{padding:22px}
+.schoolBusOverviewHead{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.schoolBusEyebrow{display:block;color:#078b4d;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.schoolBusOverviewHead h3{margin:3px 0;color:#0b1738;font-size:20px}
+.schoolBusOverviewHead small{color:#7187a0;font-size:11px}
+.schoolBusCount{min-width:84px;padding:10px 14px;text-align:center;border:1px solid #b8dec9;background:#f4fbf7;color:#078b4d}
+.schoolBusCount b,.schoolBusCount span{display:block}
+.schoolBusCount b{font-size:24px;line-height:1.1}
+.schoolBusCount span{margin-top:3px;font-size:10px;font-weight:700;text-transform:uppercase}
+.schoolBusMetrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:16px 0;border-bottom:1px solid var(--line)}
+.schoolBusMetrics>div{min-width:0;padding:10px 9px;border:1px solid #cbd9e5;background:#f8fbfd;text-align:center}
+.schoolBusMetrics b,.schoolBusMetrics span{display:block;overflow-wrap:anywhere}
+.schoolBusMetrics b{color:#0b1738;font-size:15px;line-height:1.2}
+.schoolBusMetrics span{margin-top:5px;color:#078b4d;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.schoolBusChildren{display:grid;gap:8px;margin-top:16px;max-height:360px;overflow:auto}
+.schoolBusChildRow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(120px,1fr) minmax(120px,1fr);gap:14px;align-items:center;padding:13px 14px;border:1px solid var(--line);background:#fff}
+.schoolBusChildIdentity b,.schoolBusChildIdentity small,.schoolBusEvent b,.schoolBusEventLabel{display:block}
+.schoolBusChildIdentity b{color:#294b70;font-size:13px;overflow-wrap:anywhere}
+.schoolBusChildIdentity small{margin-top:3px;color:#7b8ea5;font-size:10px;overflow-wrap:anywhere}
+.schoolBusEvent{min-width:0}
+.schoolBusEventLabel{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.schoolBusEventLabel.entry{color:#078b4d}.schoolBusEventLabel.exit{color:#b26a00}
+.schoolBusEvent b{margin-top:4px;color:#294b70;font-size:11px;font-weight:600;overflow-wrap:anywhere}
+.schoolBusCreateForm>.modalActions{padding:14px 22px;background:#f8fafc}
+@media(max-width:700px){.schoolBusOverviewHead{align-items:flex-start;flex-direction:column}.schoolBusMetrics{grid-template-columns:repeat(2,minmax(0,1fr))}.schoolBusChildRow{grid-template-columns:1fr}.schoolBusCount{width:100%;text-align:left}.schoolBusCount b,.schoolBusCount span{display:inline-block;margin:0 4px 0 0}}
+.schoolInlineBusAssign .schoolBusAssignIntro{padding-top:0}
+.schoolInlineBusAssign .schoolBusAssignForm .modalActions{margin:18px -20px 0}
+
+/* Separate school-bus portal: same brand, with a focused school-only workspace. */
+.schoolPortalShell{min-height:100vh;background:#f4f8fc;color:#0b2444;display:grid;grid-template-columns:232px 1fr;grid-template-rows:72px 1fr}
+.schoolPortalSidebar{grid-row:1/3;display:flex;flex-direction:column;background:#fff;border-right:1px solid #d7e2ec;box-shadow:4px 0 18px rgba(12,43,74,.04);z-index:2}
+.schoolPortalBrand{height:72px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid #e4edf4}.schoolPortalBrand .company-logo{width:100%;height:48px}.schoolPortalBrand .fullBrandImage{max-width:180px;max-height:46px}
+.schoolPortalSidebar nav{padding:20px 12px;display:grid;gap:6px}.schoolPortalSidebar nav button,.schoolPortalLogout{width:100%;border:0;background:transparent;color:#45627e;display:flex;align-items:center;gap:12px;padding:13px 14px;font-size:14px;font-weight:700;text-align:left;cursor:pointer}.schoolPortalSidebar nav button svg,.schoolPortalLogout svg{width:19px;height:19px}.schoolPortalSidebar nav button:hover,.schoolPortalLogout:hover{background:#edf8f2;color:#078b4d}.schoolPortalSidebar nav button.active{background:#08a85d;color:#fff;box-shadow:0 5px 12px rgba(8,168,93,.18)}.schoolPortalLogout{margin:auto 12px 20px;color:#c04b54}
+.schoolPortalTop{display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:#fff;border-bottom:1px solid #d7e2ec}.schoolPortalTitle{display:flex;flex-direction:column;gap:2px}.schoolPortalTitle b{font-size:20px;color:#0b3157}.schoolPortalTitle span{font-size:12px;color:#7187a0}.schoolPortalProfile{position:relative}.schoolPortalProfile>button{border:0;background:transparent;display:flex;align-items:center;gap:10px;color:#163b60;cursor:pointer;padding:5px}.schoolPortalProfile>button>span:nth-child(2){display:flex;flex-direction:column;text-align:left;gap:2px}.schoolPortalProfile small{font-size:11px;color:#7187a0}.schoolPortalProfile svg{width:16px}.schoolPortalAvatar{display:grid;place-items:center;width:34px;height:34px;background:#08a85d;color:#fff;font-weight:800;border-radius:50%}.schoolPortalMenu{position:absolute;right:0;top:46px;min-width:160px;padding:6px;background:#fff;border:1px solid #d7e2ec;box-shadow:0 12px 28px rgba(12,43,74,.14);z-index:5}.schoolPortalMenu button{width:100%;border:0;background:#fff;color:#45627e;padding:10px;text-align:left;display:flex;align-items:center;gap:8px;cursor:pointer}.schoolPortalMenu button:hover{background:#edf8f2;color:#078b4d}
+.schoolPortalMain{min-width:0;overflow:auto}.schoolPortalPage{padding:30px;max-width:1280px;margin:0 auto}.schoolPortalPageHead{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:24px}.schoolPortalPageHead h1{margin:0;color:#0b3157;font-size:28px}.schoolPortalPageHead p{margin:7px 0 0;color:#7187a0;font-size:13px}.schoolPortalPageActions{display:flex;gap:8px;flex-wrap:wrap}.schoolPortalPage button.primary{display:inline-flex;align-items:center;gap:7px}
+.schoolPortalStats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:20px}.schoolPortalStats>div{padding:19px;background:#fff;border:1px solid #d7e2ec;display:grid;grid-template-columns:42px 1fr;grid-template-rows:auto auto;column-gap:12px;align-items:center}.schoolPortalStats span{grid-row:1/3;width:42px;height:42px;display:grid;place-items:center;background:#eaf8f1;color:#078b4d}.schoolPortalStats svg{width:20px}.schoolPortalStats small{color:#7187a0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.schoolPortalStats b{margin-top:4px;color:#0b3157;font-size:25px}
+.schoolPortalGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.schoolPortalCard{background:#fff;border:1px solid #d7e2ec;padding:22px}.schoolPortalCard>header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:18px}.schoolPortalCard h2{margin:0;color:#0b3157;font-size:18px}.schoolPortalCard p{margin:5px 0 0;color:#7187a0;font-size:12px}.schoolPortalCard>header button{border:1px solid #c5d5e2;background:#fff;color:#078b4d;padding:8px 11px;font-weight:700;cursor:pointer}.schoolPortalActivity,.schoolPortalBusList{display:grid;gap:4px}.schoolPortalActivity>div,.schoolPortalBusList>div{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #edf2f6}.schoolPortalActivity>div:last-child,.schoolPortalBusList>div:last-child{border-bottom:0}.schoolPortalActivityIcon,.schoolPortalBusIcon{width:32px;height:32px;display:grid;place-items:center;background:#eaf8f1;color:#078b4d;flex:0 0 auto}.schoolPortalActivityIcon svg{width:16px}.schoolPortalActivity>div>div,.schoolPortalBusList>div>div{display:flex;flex-direction:column;gap:2px;min-width:0}.schoolPortalActivity b,.schoolPortalBusList b{color:#294b70;font-size:13px}.schoolPortalActivity small,.schoolPortalBusList small{color:#7187a0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.schoolPortalActivity time{margin-left:auto;color:#7187a0;font-size:10px;text-align:right}.schoolPortalBusList strong{margin-left:auto;color:#078b4d;font-size:11px;white-space:nowrap}
+.schoolPortalTableCard{padding:0;overflow:hidden}.schoolPortalTableCard .tableWrap{overflow:auto}.schoolPortalTableCard table{min-width:760px}.schoolPortalTableCard td small,.schoolPortalTableCard th small{display:block;margin-top:3px;color:#7187a0;font-size:10px}.schoolPortalRowButton{display:inline-flex;align-items:center;gap:5px;border:1px solid #c5d5e2;background:#fff;color:#244d73;padding:7px 10px;cursor:pointer}.schoolPortalBusCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.schoolPortalBusCard{background:#fff;border:1px solid #d7e2ec;padding:20px}.schoolPortalBusCardHead{display:flex;align-items:flex-start;gap:12px}.schoolPortalBusCardHead>div{min-width:0;flex:1}.schoolPortalBusCardHead h2{margin:2px 0 4px;color:#0b3157;font-size:18px}.schoolPortalBusCardHead p{margin:0;color:#7187a0;font-size:12px}.schoolPortalBusFacts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:18px;padding-top:16px;border-top:1px solid #e4edf4}.schoolPortalBusFacts div{min-width:0}.schoolPortalBusFacts small,.schoolPortalBusFacts b{display:block}.schoolPortalBusFacts small{color:#7187a0;font-size:10px;text-transform:uppercase;letter-spacing:.03em}.schoolPortalBusFacts b{margin-top:4px;color:#294b70;font-size:12px;overflow-wrap:anywhere}
+@media(max-width:900px){.schoolPortalShell{grid-template-columns:72px 1fr}.schoolPortalBrand{padding:0 15px;justify-content:center}.schoolPortalBrand .fullBrandImage,.schoolPortalBrand .fallbackBrandText{display:none}.schoolPortalSidebar nav button,.schoolPortalLogout{justify-content:center;padding:13px 8px}.schoolPortalSidebar nav button span,.schoolPortalLogout span{display:none}.schoolPortalPage{padding:22px}.schoolPortalStats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.schoolPortalTop{padding:0 16px}.schoolPortalTitle span{display:none}.schoolPortalPageHead{flex-direction:column}.schoolPortalGrid,.schoolPortalBusCards{grid-template-columns:1fr}.schoolPortalPage{padding:16px}.schoolPortalStats{gap:8px}.schoolPortalStats>div{padding:13px 10px}}
+
+/* Production polish: keep the full logo visible and add consistent motion without shifting layout. */
+.schoolPortalShell{grid-template-columns:250px 1fr}
+.schoolPortalBrand .fullBrandImage{display:block!important;max-width:198px;max-height:46px}
+.schoolPortalBrand .compactBrandImage,.schoolPortalBrand .compactBrandMark{display:none!important}
+.schoolPortalMain{animation:schoolPortalFade .28s ease-out}
+.schoolPortalView{animation:schoolPortalRise .32s ease-out}
+.schoolPortalPage{animation:schoolPortalRise .32s ease-out}
+.schoolPortalCard,.schoolPortalStats>div,.schoolPortalBusCard{transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}
+.schoolPortalCard:hover,.schoolPortalStats>div:hover,.schoolPortalBusCard:hover{transform:translateY(-2px);border-color:#b9d8c8;box-shadow:0 12px 28px rgba(12,43,74,.08)}
+.schoolPortalSidebar nav button,.schoolPortalLogout,.schoolPortalPageActions button,.schoolPortalCard>header button,.schoolPortalRowButton,.schoolPortalProfile>button{transition:background-color .18s ease,color .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease}
+.schoolPortalSidebar nav button,.schoolPortalLogout,.schoolPortalPageActions button,.schoolPortalCard>header button,.schoolPortalRowButton{border-radius:0!important}
+.schoolPortalSidebar nav button:focus-visible,.schoolPortalLogout:focus-visible,.schoolPortalPageActions button:focus-visible,.schoolPortalCard>header button:focus-visible,.schoolPortalRowButton:focus-visible,.schoolPortalProfile>button:focus-visible{outline:3px solid rgba(8,168,93,.28);outline-offset:2px}
+.schoolPortalSidebar nav button:active,.schoolPortalPageActions button:active,.schoolPortalCard>header button:active,.schoolPortalRowButton:active{transform:translateY(1px)}
+.schoolPortalSidebar nav button.active{animation:schoolPortalPulse 2.8s ease-in-out infinite}
+.schoolPortalActivity>div,.schoolPortalBusList>div{animation:schoolPortalRise .3s ease both}
+.schoolPortalActivity>div:nth-child(2),.schoolPortalBusList>div:nth-child(2){animation-delay:.04s}
+.schoolPortalActivity>div:nth-child(3),.schoolPortalBusList>div:nth-child(3){animation-delay:.08s}
+.schoolPortalActivity>div:nth-child(4),.schoolPortalBusList>div:nth-child(4){animation-delay:.12s}
+.schoolPortalActivity>div:nth-child(5),.schoolPortalBusList>div:nth-child(5){animation-delay:.16s}
+@keyframes schoolPortalFade{from{opacity:0}to{opacity:1}}
+@keyframes schoolPortalRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes schoolPortalPulse{0%,100%{box-shadow:0 5px 12px rgba(8,168,93,.18)}50%{box-shadow:0 5px 20px rgba(8,168,93,.34)}}
+@media(max-width:1000px){.schoolPortalPage{padding:22px}.schoolPortalStats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.schoolPortalShell{display:block}.schoolPortalSidebar{position:sticky;top:0;height:auto;display:flex;flex-direction:row;align-items:center;overflow-x:auto;border-right:0;border-bottom:1px solid #d7e2ec}.schoolPortalBrand{height:64px;min-width:215px;border-bottom:0;border-right:1px solid #e4edf4;padding:0 16px}.schoolPortalBrand .fullBrandImage{max-width:182px;max-height:42px}.schoolPortalSidebar nav{display:flex;gap:4px;padding:8px;min-width:max-content}.schoolPortalSidebar nav button{width:auto;white-space:nowrap;padding:10px 12px;justify-content:flex-start}.schoolPortalSidebar nav button span,.schoolPortalLogout span{display:inline}.schoolPortalLogout{width:auto;min-width:74px;margin:0 8px 0 auto;white-space:nowrap;padding:10px}.schoolPortalTop{height:64px;padding:0 16px}.schoolPortalGrid,.schoolPortalBusCards{grid-template-columns:1fr}.schoolPortalPageHead{flex-direction:column}.schoolPortalPage{padding:18px 14px}}
+@media(max-width:480px){.schoolPortalTitle b{font-size:17px}.schoolPortalTitle span{display:none}.schoolPortalProfile>button>span:nth-child(2){display:none}.schoolPortalPageHead h1{font-size:24px}.schoolPortalStats{gap:8px}.schoolPortalStats>div{padding:13px 10px;grid-template-columns:34px 1fr}.schoolPortalStats span{width:34px;height:34px}.schoolPortalStats b{font-size:21px}.schoolPortalBusFacts{grid-template-columns:1fr 1fr}.schoolPortalBusFacts div:last-child{grid-column:1/-1}}
+@media(prefers-reduced-motion:reduce){.schoolPortalMain,.schoolPortalView,.schoolPortalPage,.schoolPortalActivity>div,.schoolPortalBusList>div,.schoolPortalSidebar nav button.active{animation:none!important}.schoolPortalCard,.schoolPortalStats>div,.schoolPortalBusCard,.schoolPortalSidebar nav button,.schoolPortalPageActions button,.schoolPortalCard>header button,.schoolPortalRowButton{transition:none!important}}
+
+/* Dashboard metrics and drill-down panel. */
+.schoolPortalPage{max-width:none;width:100%;min-height:calc(100vh - 72px);box-sizing:border-box;padding:32px 40px}
+.schoolPortalCsvActions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.schoolPortalCsvActions button{display:inline-flex;align-items:center;gap:6px;border:1px solid #c5d5e2;background:#fff;color:#245073;padding:9px 11px;font-size:12px;font-weight:700;cursor:pointer;border-radius:0!important;transition:background-color .18s ease,color .18s ease,border-color .18s ease,transform .18s ease}.schoolPortalCsvActions button:hover{background:#edf8f2;border-color:#08a85d;color:#078b4d;transform:translateY(-1px)}.schoolPortalCsvActions button:disabled{opacity:.55;cursor:wait}.schoolPortalCsvActions svg{width:15px;height:15px}.schoolPortalFormNote{display:flex;align-items:center;gap:7px;padding:11px 12px;border:1px solid #cde7d8;background:#f2fbf6;color:#078b4d;font-size:12px}.schoolPortalFormNote svg{width:16px;height:16px}
+.schoolPortalReportFilters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px;margin-bottom:16px;background:#fff;border:1px solid #d7e2ec}.schoolPortalReportFilters .field{margin:0}.schoolPortalReportStats{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.schoolPortalReportStats .schoolPortalStatCard{cursor:default}.schoolPortalReportStats .schoolPortalStatCard:hover{transform:none;box-shadow:none}.schoolPortalSettingsCard{max-width:980px;padding:24px}.schoolPortalSettingsCard .modalActions{justify-content:flex-start}
+.schoolPortalStats{grid-template-columns:repeat(7,minmax(0,1fr));align-items:stretch}
+.schoolPortalStatCard{position:relative;min-width:0;padding:18px 14px;background:#fff;border:1px solid #d7e2ec;color:#0b2444;display:grid;grid-template-columns:36px minmax(0,1fr) 14px;gap:10px;align-items:center;text-align:left;cursor:pointer;border-radius:0!important;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease,background-color .22s ease}
+.schoolPortalStatCard:hover,.schoolPortalStatCard:focus-visible{transform:translateY(-2px);border-color:#08a85d;box-shadow:0 12px 24px rgba(12,43,74,.1);outline:none}.schoolPortalStatCard.selected{background:#effaf4;border-color:#08a85d;box-shadow:0 8px 20px rgba(8,168,93,.14)}
+.schoolPortalStatCard>span{width:36px;height:36px;display:grid;place-items:center;background:#eaf8f1;color:#078b4d}.schoolPortalStatCard>span svg{width:18px;height:18px}.schoolPortalStatCard>div{min-width:0}.schoolPortalStatCard small,.schoolPortalStatCard b,.schoolPortalStatCard em{display:block}.schoolPortalStatCard small{color:#7187a0;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.schoolPortalStatCard b{margin-top:4px;color:#0b3157;font-size:26px;line-height:1}.schoolPortalStatCard em{margin-top:7px;color:#7187a0;font-size:10px;line-height:1.25;font-style:normal}.schoolPortalStatCard>svg{width:14px;color:#91a7ba}
+.schoolPortalDrilldown{margin:0 0 20px;padding:22px}.schoolPortalDrilldownList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.schoolPortalDrilldownList>button{display:grid;grid-template-columns:32px minmax(0,1fr) auto 14px;gap:10px;align-items:center;padding:11px 12px;border:1px solid #e1eaf1;background:#fbfdfe;color:#284769;text-align:left;cursor:pointer;border-radius:0!important;transition:border-color .18s ease,background-color .18s ease,transform .18s ease}.schoolPortalDrilldownList>button:hover{border-color:#08a85d;background:#f2fbf6;transform:translateX(2px)}.schoolPortalDrilldownIcon{width:32px;height:32px;display:grid;place-items:center;background:#eaf8f1;color:#078b4d}.schoolPortalDrilldownIcon svg{width:15px}.schoolPortalDrilldownList>button>span:nth-child(2){min-width:0}.schoolPortalDrilldownList b,.schoolPortalDrilldownList small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.schoolPortalDrilldownList b{font-size:12px}.schoolPortalDrilldownList small{margin-top:3px;color:#7187a0;font-size:10px}.schoolPortalDrilldownList strong{color:#078b4d;font-size:10px;white-space:nowrap}.schoolPortalDrilldownList>button>svg{width:14px;color:#91a7ba}
+@media(max-width:1450px){.schoolPortalStats{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1000px){.schoolPortalPage{padding:22px}.schoolPortalStats{grid-template-columns:repeat(3,minmax(0,1fr))}.schoolPortalDrilldownList{grid-template-columns:1fr}}
+@media(max-width:760px){.schoolPortalReportFilters{grid-template-columns:repeat(2,minmax(0,1fr))}.schoolPortalReportStats{grid-template-columns:1fr}}
+@media(max-width:760px){.schoolPortalPage{padding:18px 14px}.schoolPortalStats{grid-template-columns:repeat(2,minmax(0,1fr))}.schoolPortalStatCard{padding:14px 11px}.schoolPortalStatCard em{display:none}}
+@media(max-width:480px){.schoolPortalStats{grid-template-columns:1fr 1fr}.schoolPortalStatCard{grid-template-columns:32px minmax(0,1fr) 12px}.schoolPortalStatCard>span{width:32px;height:32px}.schoolPortalStatCard b{font-size:22px}}
+
+.schoolCsvPreviewOverlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:18px;background:rgba(6,28,49,.58);animation:schoolPortalFade .16s ease}
+.schoolCsvPreview{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(1050px,96vw);max-height:min(82vh,760px);background:#fff;border:1px solid #c8d8e5;box-shadow:0 24px 70px rgba(7,26,46,.28)}
+.schoolCsvPreview>header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 22px;border-bottom:1px solid #d7e2ec}
+.schoolCsvPreview h2{margin:0;color:#0b3157;font-size:20px}
+.schoolCsvPreview>header p{margin:5px 0 0;color:#7187a0;font-size:12px}
+.schoolCsvPreview>header button{width:34px;height:34px;border:1px solid #d7e2ec;background:#fff;color:#486781;cursor:pointer}
+.schoolCsvPreviewTable{overflow:auto;padding:18px 22px}
+.schoolCsvPreviewTable table{width:100%;border-collapse:collapse;white-space:nowrap}
+.schoolCsvPreviewTable th,.schoolCsvPreviewTable td{max-width:260px;padding:10px 12px;border:1px solid #e2eaf1;text-align:left;text-overflow:ellipsis;overflow:hidden}
+.schoolCsvPreviewTable th{background:#f3f7fa;color:#3b5874;font-size:11px}
+.schoolCsvPreviewTable td{color:#294b70;font-size:12px}
+.schoolCsvPreviewTable>p{margin:10px 0 0;color:#7187a0;font-size:11px}
+.schoolCsvPreview>footer{display:flex;justify-content:flex-end;gap:8px;padding:14px 22px;border-top:1px solid #d7e2ec}
+.schoolCsvPreview>footer button{min-height:40px;padding:0 14px;border:1px solid #c5d5e2;background:#fff;color:#244d73;font-weight:700;cursor:pointer;border-radius:0!important}
+.schoolCsvPreview>footer button.primary{border-color:#08a85d;background:#08a85d;color:#fff}
+.schoolCsvPreview>footer button:disabled{opacity:.55;cursor:wait}
+@media(max-width:600px){.schoolCsvPreviewOverlay{padding:8px}.schoolCsvPreview{width:100%;max-height:88vh}.schoolCsvPreview>header,.schoolCsvPreviewTable,.schoolCsvPreview>footer{padding-left:12px;padding-right:12px}.schoolCsvPreview h2{font-size:17px}}
+
+/* Final layout pass: use the full school workspace and keep every page readable. */
+.schoolPortalShell{grid-template-columns:250px minmax(0,1fr);grid-template-rows:72px minmax(0,1fr)}
+.schoolPortalMain{display:flex;flex-direction:column;width:100%;min-width:0;min-height:calc(100vh - 72px);overflow-x:hidden;overflow-y:auto}
+.schoolPortalView{display:flex;flex:1;flex-direction:column;min-width:0;width:100%}
+.schoolPortalPage{flex:1;width:100%;max-width:none;min-width:0;margin:0;padding:clamp(18px,2.2vw,36px);box-sizing:border-box}
+.schoolPortalPageHead{align-items:center;min-width:0;flex-wrap:wrap}
+.schoolPortalPageHead>div:first-child{min-width:220px;flex:1 1 280px}
+.schoolPortalPageHead h1,.schoolPortalPageHead p{overflow-wrap:anywhere}
+.schoolPortalPageActions{flex:0 1 auto;max-width:100%;justify-content:flex-end;align-items:center}
+.schoolPortalPageActions>*{max-width:100%}
+.schoolPortalTableCard{width:100%;min-width:0}
+.schoolPortalTableCard .tableWrap{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+.schoolPortalTableCard table{width:100%;table-layout:auto;border-collapse:collapse}
+.schoolPortalTableCard td{overflow-wrap:anywhere}
+.schoolPortalTableCard td small{overflow-wrap:anywhere}
+.schoolPortalDashboard{display:flex;flex-direction:column;gap:0}
+.schoolPortalDashboard .schoolPortalStats{grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+.schoolPortalDashboard .schoolPortalStatCard{min-height:104px;box-sizing:border-box;border-left:4px solid var(--stat-accent);background:var(--stat-bg);padding:16px 14px 16px 12px}
+.schoolPortalDashboard .schoolPortalStatCard>span{background:var(--stat-icon-bg);color:var(--stat-accent)}
+.schoolPortalDashboard .schoolPortalStatCard small{color:#4e6680;white-space:normal;overflow-wrap:anywhere}
+.schoolPortalDashboard .schoolPortalStatCard b{font-size:28px;line-height:1.05}
+.schoolPortalDashboard .schoolPortalStatCard em{color:#657b91;overflow-wrap:anywhere}
+.schoolPortalDashboard .schoolPortalStatCard.selected{box-shadow:0 0 0 2px var(--stat-accent),0 10px 22px rgba(12,43,74,.1)}
+.schoolPortalDashboard .schoolPortalStatCard:nth-child(7n+1){--stat-accent:#078b4d;--stat-bg:#effaf4;--stat-icon-bg:#d8f2e3}
+.schoolPortalDashboard .schoolPortalStatCard:nth-child(7n+2){--stat-accent:#2876c7;--stat-bg:#f0f7ff;--stat-icon-bg:#dcecff}
+.schoolPortalDashboard .schoolPortalStatCard:nth-child(7n+3){--stat-accent:#7654c8;--stat-bg:#f6f2ff;--stat-icon-bg:#e9e0ff}
+.schoolPortalDashboard .schoolPortalStatCard:nth-child(7n+4){--stat-accent:#c27a08;--stat-bg:#fff8e9;--stat-icon-bg:#ffedc7}
+.schoolPortalDashboard .schoolPortalStatCard:nth-child(7n+5){--stat-accent:#cf5263;--stat-bg:#fff3f4;--stat-icon-bg:#ffe0e4}
+.schoolPortalDashboard .schoolPortalStatCard:nth-child(7n+6){--stat-accent:#078b9e;--stat-bg:#eefbfc;--stat-icon-bg:#d8f3f6}
+.schoolPortalDashboard .schoolPortalStatCard:nth-child(7n){--stat-accent:#527c3b;--stat-bg:#f4f9ef;--stat-icon-bg:#e4efd8}
+.schoolPortalDashboard .schoolPortalGrid{flex:1;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);align-items:stretch;gap:18px}
+.schoolPortalDashboard .schoolPortalGrid>.schoolPortalCard{min-width:0;min-height:clamp(300px,38vh,480px);box-sizing:border-box}
+.schoolPortalDashboard .schoolPortalActivity time{max-width:38%;overflow-wrap:anywhere}
+.schoolPortalDrilldownList{grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))}
+.schoolPortalDrilldownList>button{min-width:0}
+.schoolPortalPageActions select{height:36px;min-width:160px;max-width:100%;padding:0 30px 0 10px;border:1px solid #c5d5e2;border-radius:0;background:#fff;color:#244d73;font:inherit}
+.schoolPortalRowActions{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.schoolPortalRowActions .schoolPortalRowButton{min-height:34px}
+.schoolPortalView input[type="date"],.schoolPortalView input[type="datetime-local"]{display:block;width:100%;min-width:0;min-height:42px;padding:0 12px;border:1px solid #c5d5e2!important;border-radius:0!important;background:#fff!important;color:#173a5e!important;color-scheme:light;font-size:13px;line-height:1.3;box-shadow:none;transition:border-color .18s ease,box-shadow .18s ease}
+.schoolPortalView input[type="date"]:focus,.schoolPortalView input[type="datetime-local"]:focus{outline:none!important;border-color:#08a85d!important;box-shadow:0 0 0 3px rgba(8,168,93,.14)!important}
+.schoolPortalView input[type="date"]::-webkit-calendar-picker-indicator,.schoolPortalView input[type="datetime-local"]::-webkit-calendar-picker-indicator{width:17px;height:17px;padding:2px;cursor:pointer;opacity:.72}
+.schoolPortalReportFilters>label{display:flex;flex-direction:column;align-items:stretch;gap:7px;min-width:0;margin:0;color:#244d73;font-size:12px;font-weight:700}
+.schoolPortalReportFilters select{display:block;width:100%;min-width:0;height:42px;padding:0 12px;border:1px solid #c5d5e2;border-radius:0;background:#fff;color:#173a5e;font-size:13px;line-height:1.3}
+.schoolPortalReportFilters select:focus{outline:none;border-color:#08a85d;box-shadow:0 0 0 3px rgba(8,168,93,.14)}
+@media(max-width:1450px){.schoolPortalDashboard .schoolPortalStats{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1100px){.schoolPortalDashboard .schoolPortalStats{grid-template-columns:repeat(3,minmax(0,1fr))}.schoolPortalDashboard .schoolPortalGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.schoolPortalPageActions{justify-content:flex-start}}
+@media(max-width:760px){.schoolPortalPage{padding:18px 14px}.schoolPortalPageHead{align-items:flex-start}.schoolPortalPageHead>div:first-child{flex-basis:100%}.schoolPortalPageActions{width:100%;justify-content:flex-start}.schoolPortalDashboard .schoolPortalStats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.schoolPortalDashboard .schoolPortalGrid{grid-template-columns:1fr}.schoolPortalDashboard .schoolPortalGrid>.schoolPortalCard{min-height:280px}.schoolPortalDashboard .schoolPortalStatCard{min-height:94px}}
+@media(max-width:420px){.schoolPortalDashboard .schoolPortalStatCard{grid-template-columns:30px minmax(0,1fr) 10px;gap:7px;padding:12px 8px}.schoolPortalDashboard .schoolPortalStatCard>span{width:30px;height:30px}.schoolPortalDashboard .schoolPortalStatCard b{font-size:23px}.schoolPortalDashboard .schoolPortalStatCard em{display:none}.schoolPortalPageActions>*{flex:0 1 auto}}
+.modal.wide.schoolPortalSummaryModal{width:min(900px,calc(100vw - 32px));max-width:900px;animation:schoolPortalRise .22s ease-out}
+.schoolPortalSummaryModal .modalBody{max-height:min(68vh,620px);overflow:auto;padding:20px 24px}
+.schoolPortalSummaryList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.schoolPortalSummaryList>button{display:grid;grid-template-columns:38px minmax(0,1fr) auto 15px;gap:11px;align-items:center;min-width:0;min-height:78px;padding:12px;border:1px solid #dce7ef;border-left:4px solid #08a85d;background:#f9fcff;color:#244b70;text-align:left;cursor:pointer;border-radius:0!important;transition:background-color .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease}
+.schoolPortalSummaryList>button:hover{background:#f0faf4;border-color:#9ed8b7;box-shadow:0 5px 14px rgba(12,43,74,.08);transform:translateY(-1px)}
+.schoolPortalSummaryList .schoolPortalDrilldownIcon{width:38px;height:38px;background:#e7f7ed}
+.schoolPortalSummaryList>button>span:nth-child(2){min-width:0}
+.schoolPortalSummaryList b,.schoolPortalSummaryList small{display:block;overflow-wrap:anywhere}
+.schoolPortalSummaryList b{color:#173f65;font-size:13px;line-height:1.3}
+.schoolPortalSummaryList small{margin-top:4px;color:#7187a0;font-size:11px;line-height:1.3}
+.schoolPortalSummaryList strong{max-width:150px;color:#078b4d;font-size:11px;text-align:right;overflow-wrap:anywhere}
+.schoolPortalSummaryList>button>svg{width:15px;color:#8ba2b8}
+@media(max-width:600px){.schoolPortalSummaryModal .modalBody{padding:14px}.schoolPortalSummaryList{grid-template-columns:1fr}.schoolPortalSummaryList>button{min-height:70px}}
+@media(prefers-reduced-motion:reduce){.schoolPortalSummaryModal{animation:none!important}.schoolPortalSummaryList>button{transition:none!important}}
+
+/* Keep student cards and bus reader hardware in separate, full-width RFID tabs. */
+.schoolPortalRfidPage{flex:1;width:100%;max-width:none;min-width:0;margin:0;padding:clamp(16px,1.5vw,28px);box-sizing:border-box}
+@media(max-width:760px){.schoolPortalRfidPage{padding:16px 14px}}
+.schoolPortalCard.schoolPortalTableCard{min-height:0}
+.schoolPortalCard.schoolPortalTableCard:hover{transform:none;border-color:#d7e2ec;box-shadow:none}
+.schoolPortalRfidPage .schoolPortalTableCard .empty{min-height:80px;padding:16px}
+.schoolPortalRfidTabs{display:flex;align-items:center;gap:8px;margin:-8px 0 16px;border-bottom:1px solid #d7e2ec}
+.schoolPortalRfidTabs>button{min-height:43px;display:inline-flex;align-items:center;gap:8px;padding:0 14px;border:0;border-bottom:3px solid transparent;background:transparent;color:#637895;font-size:13px;font-weight:700;cursor:pointer;transition:color .16s ease,border-color .16s ease,background-color .16s ease}
+.schoolPortalRfidTabs>button:hover{background:#f5fbf7;color:#078b4d}
+.schoolPortalRfidTabs>button.active{border-bottom-color:#08a85d;color:#078b4d}
+.schoolPortalRfidTabs>button>span{min-width:21px;height:21px;display:grid;place-items:center;padding:0 5px;background:#eef4f8;color:#526e89;font-size:10px}
+.schoolPortalRfidTabs>button.active>span{background:#e5f7ed;color:#078b4d}
+.schoolPortalRfidPanel{display:grid;gap:14px;min-width:0}
+@media(max-width:760px){.schoolPortalRfidTabs{margin-top:-4px}.schoolPortalRfidTabs>button{flex:1;justify-content:center;padding:0 8px;font-size:12px}}
+
+/* School Bus record deletion controls and confirmation dialog. */
+.schoolPortalRowActions{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.schoolPortalRowDelete{color:#b42318!important;border-color:#efc6c2!important}
+.schoolPortalRowDelete:hover{background:#fff3f1!important;border-color:#dc756c!important;color:#9f1d16!important}
+.schoolPortalRowActions svg,.schoolPortalRowDelete svg{width:14px;height:14px}
+.schoolPortalDeleteConfirm{display:grid;gap:10px;color:#294b70;font-size:13px;line-height:1.55}
+.schoolPortalDeleteConfirm p{margin:0}
+.schoolPortalDeleteConfirm>p:first-child{padding:12px;border:1px solid #f0d2cf;background:#fff8f7}
+.schoolPortalDeleteActions{display:flex;justify-content:flex-end;gap:8px;margin:6px -4px -4px;padding-top:14px;border-top:1px solid #d7e2ec}
+.schoolPortalDeleteButton{color:#b42318!important;border-color:#e7aaa5!important;background:#fff!important}
+.schoolPortalDeleteButton:hover{color:#991b1b!important;border-color:#c94f47!important;background:#fff3f1!important}
+.schoolPortalDeleteActions button:disabled{opacity:.6;cursor:wait}
+.schoolPortalShell .schoolGeoRowActions button{border-radius:0;color:#496786}
+.schoolPortalShell .schoolGeoRowActions button[title='Delete geofence']{color:#b42318;border-color:#efc6c2}
+.schoolPortalShell .schoolGeoRowActions button[title='Delete geofence']:hover{background:#fff3f1;border-color:#dc756c;color:#9f1d16}
+
+/* Compact, unclipped confirmation dialog with its actions aligned to the right. */
+.modal.schoolPortalDeleteModal{width:min(520px,calc(100vw - 28px));max-height:calc(100vh - 32px);overflow:hidden}
+.modal.schoolPortalDeleteModal .modalHead{position:static;padding:18px 22px}
+.modal.schoolPortalDeleteModal .modalBody{max-height:none;overflow:visible;padding:16px 20px 18px}
+.schoolPortalDeleteConfirm{gap:12px;line-height:1.5}
+.schoolPortalDeleteConfirm>p:first-child{padding:12px 14px}
+.schoolPortalDeleteActions{justify-content:flex-end;gap:10px;margin:4px 0 0;padding:14px 0 0}
+.schoolPortalDeleteActions .schoolPortalRowButton{min-height:40px;padding:0 14px;white-space:nowrap}
+@media(max-width:480px){.modal.schoolPortalDeleteModal{width:calc(100vw - 20px)}.modal.schoolPortalDeleteModal .modalHead{padding:15px 16px}.modal.schoolPortalDeleteModal .modalBody{padding:14px 16px 16px}.schoolPortalDeleteActions .schoolPortalRowButton{padding:0 10px}}
+/* Keep the Action column at the far right on every School Bus table. */
+.schoolPortalTableCard table th:last-child,.schoolPortalTableCard table td:last-child{text-align:right;white-space:nowrap;width:1%}
+.schoolPortalTableCard .schoolPortalRowActions{justify-content:flex-end}.schoolPortalDashboard .schoolPortalStatCard b{font-variant-numeric:tabular-nums}
+/* Keep School Bus page switches steady: reserve the scrollbar gutter and use opacity only. */
+.schoolPortalMain{scrollbar-gutter:stable}
+.schoolPortalMain,.schoolPortalPage,.schoolPortalActivity>div,.schoolPortalBusList>div{animation:none!important;transform:none!important}
+.schoolPortalView{animation:schoolPortalSwitchFade .14s ease-out both!important;transform:none!important}
+@keyframes schoolPortalSwitchFade{from{opacity:.65}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.schoolPortalView{animation:none!important}}
+
+/* In-form location picker: keep map selection on the current page. */
+.schoolLocationPickerOverlay{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:20px;background:rgba(9,31,54,.58);backdrop-filter:blur(3px)}
+.schoolLocationPicker{width:min(1120px,calc(100vw - 40px));max-height:94vh;display:flex;flex-direction:column;overflow:hidden;background:#fff;border:1px solid #cbd9e5;box-shadow:0 24px 72px rgba(10,33,58,.32)}
+.schoolLocationPicker>header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:18px 22px;border-bottom:1px solid #dbe5ee}
+.schoolLocationPicker>header h2{margin:0;color:#0b3157;font-size:20px}.schoolLocationPicker>header p{margin:5px 0 0;color:#7187a0;font-size:12px}
+.schoolLocationPicker>header>button{width:34px;height:34px;display:grid;place-items:center;border:1px solid #dbe5ee;background:#fff;color:#496786}.schoolLocationPicker>header>button svg{width:17px}
+.schoolLocationPickerSearch{position:relative;z-index:2;padding:12px 20px 8px}
+.schoolLocationPickerSearch>div:first-child{height:42px;display:flex;align-items:center;gap:9px;padding:0 12px;border:1px solid #c5d5e2;background:#fff}.schoolLocationPickerSearch>div:first-child:focus-within{border-color:#08a85d;box-shadow:0 0 0 3px rgba(8,168,93,.12)}
+.schoolLocationPickerSearch>div:first-child svg{width:17px;flex:none;color:#587493}.schoolLocationPickerSearch input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#183153}.schoolLocationPickerSearch>div:first-child small{white-space:nowrap;color:#7187a0;font-size:11px}
+.schoolLocationPickerResults{position:absolute;top:56px;left:20px;right:20px;max-height:210px;overflow:auto;border:1px solid #cbd9e5;background:#fff;box-shadow:0 12px 24px rgba(20,45,70,.16)}
+.schoolLocationPickerResults button{width:100%;min-height:40px;display:flex;align-items:center;gap:9px;padding:8px 12px;border:0;border-bottom:1px solid #edf1f5;background:#fff;color:#294b70;text-align:left}.schoolLocationPickerResults button:hover{background:#f1f8f4}.schoolLocationPickerResults svg{width:16px;flex:none;color:#0a9b59}.schoolLocationPickerResults span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.schoolLocationPickerError{display:block;padding:7px 0;color:#b42318;font-size:11px}
+.schoolLocationPickerMap{position:relative;flex:1;min-height:300px;height:min(58vh,620px);margin:0 20px 14px;border:1px solid #d3dee8;background:#e9f0f6}.schoolLocationPickerMap .leaflet-container{width:100%;height:100%;min-height:300px}
+.schoolLocationPickerCoordinates{position:absolute;z-index:500;left:12px;bottom:12px;max-width:calc(100% - 24px);display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid #d5e0e9;background:#fff;color:#294b70;font-size:11px;box-shadow:0 2px 8px rgba(18,50,78,.12)}.schoolLocationPickerCoordinates svg{width:15px;flex:none;color:#0a9b59}
+.schoolLocationPicker>footer{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 20px;border-top:1px solid #dbe5ee;background:#fff}.schoolLocationPicker>footer>span{min-width:0;color:#627c98;font-size:11px;overflow-wrap:anywhere}.schoolLocationPicker>footer>div{display:flex;justify-content:flex-end;gap:8px;flex:none}
+.schoolLocationPicker>footer button{height:38px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 13px;border:1px solid #cbd9e5;background:#fff;color:#294b70}.schoolLocationPicker>footer button.primary{border-color:#0da15b;background:#0da15b;color:#fff}.schoolLocationPicker>footer button svg{width:16px}
+@media(max-width:700px){.schoolLocationPickerOverlay{padding:8px}.schoolLocationPicker{width:calc(100vw - 16px);max-height:96vh}.schoolLocationPicker>header{padding:14px}.schoolLocationPickerSearch{padding:10px 12px 8px}.schoolLocationPickerResults{left:12px;right:12px}.schoolLocationPickerMap{height:58vh;min-height:250px;margin:0 12px 10px}.schoolLocationPicker>footer{align-items:stretch;flex-direction:column;padding:10px 12px}.schoolLocationPicker>footer>div{width:100%}.schoolLocationPicker>footer button{flex:1}}
+
+/* Center dashboard status content without changing the original card dimensions */
+.kpi.statusKpi{justify-content:center;text-align:center}
+.kpi.statusKpi>div{display:flex;flex-direction:column;align-items:center;text-align:center}

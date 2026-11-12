@@ -7,6 +7,7 @@ export async function syncDrivers(db,companyId,drivers){
  const digest=createHash('sha256').update(JSON.stringify(drivers)).digest('hex');
  const previous=await db.query('SELECT digest FROM driver_master_sync WHERE company_id=$1',[companyId]);
  if(previous.rows[0]?.digest===digest)return;
+ await db.query('SELECT pg_advisory_xact_lock(728104,$1::int)',[companyId]);
  await db.query('UPDATE driver_identifiers SET active=false WHERE company_id=$1',[companyId]);
  await db.query('UPDATE drivers SET active=false WHERE company_id=$1',[companyId]);
  for(const d of drivers){const active=String(d.status||'Active').toLowerCase()==='active';

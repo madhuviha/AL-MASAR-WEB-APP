@@ -1,5 +1,6 @@
 import {mapDeviceTelemetry} from './device-profile-rules.mjs';
 import {syncDrivers,identifyPosition} from './driver-identification.mjs';
+import {processTrackerChildRfid} from './parent-bus.mjs';
 
 // Read stored decoded packets as well as latest snapshots: a brief tag event
 // must not disappear between polls. Durable cursors catch up after downtime.
@@ -33,10 +34,13 @@ export function startDriverWorker({pool,trackingApi,livePool=null,intervalMs=200
      await db.query('BEGIN');
      const state=(await db.query('SELECT data FROM company_state WHERE company_id=$1 FOR UPDATE',[co.id])).rows[0];
      if(!state){await db.query('ROLLBACK');continue;}
+     // Driver identifiers are synced independently from School Bus child cards.
      await syncDrivers(db,co.id,state.data.drivers||[]);
      const ordered=batches.flatMap(b=>b.positions.map(position=>({vehicle:b.vehicle,position}))).sort((a,b)=>Date.parse(a.position.deviceTime||a.position.serverTime||a.position.fixTime)-Date.parse(b.position.deviceTime||b.position.serverTime||b.position.fixTime));
      const alerts=[];let changed=false;
      for(const item of ordered){
+      const childScan=await processTrackerChildRfid(db,item.vehicle,item.position,state.data.schoolRfidCards||[]);
+      if(childScan.handled){if(childScan.event&&!childScan.duplicate)changed=true;continue;}
       const driverSensor=(state.data.sensorConfigs||[]).find(s=>String(s.vehicleId)===String(item.vehicle.id)&&s.type==='RFID / iButton');const driverVehicle=driverSensor?{...item.vehicle,metadata:{...(item.vehicle.metadata||{}),driverIdentification:{enabled:true,sourceKey:driverSensor.sourceKey||'driverUniqueId',type:driverSensor.sensorType||'DRIVER_ID'}}}:item.vehicle;const result=await identifyPosition(db,driverVehicle,mapDeviceTelemetry(item.position,item.vehicle.metadata?.ioMappings||[]));
       if(result)changed=true;
       if(result?.status==='unknown'&&item.vehicle.metadata?.driverIdentification?.unknownAlert===true)alerts.push({id:'driver-'+result.event_id,companyId:co.id,vehicleId:item.vehicle.id,deviceId:item.vehicle.traccar_device_id,vehicleName:item.vehicle.name,type:'Unknown Driver',status:'New',read:false,createdAt:result.identified_at,identifier:result.identifier,message:'Unregistered driver identifier: '+result.identifier});

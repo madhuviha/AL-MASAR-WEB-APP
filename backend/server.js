@@ -1,4 +1,5 @@
 import {initializePush} from './mobile-push.mjs';
+import {authRolePayload,defaultAppRole,scopeUserToSession} from './auth-roles.mjs';
 import {dedupeAlertEvents,normalizeAlertRules} from './alert-rules.mjs';
 import {initializeDeviceProfiles,registerDeviceProfileRoutes,resolveDeviceProfile,saveIoMappings} from './device-profiles.mjs';
 import {mapDeviceTelemetry,validateIoMappings} from './device-profile-rules.mjs';
@@ -112,8 +113,10 @@ const verifyPassword = (password, stored) => {
 };
 async function authUserFromReq(req){
   const h=String(req.headers.authorization||''); const token=h.startsWith('Bearer ')?h.slice(7).trim():''; if(!token)return null;
-  const {rows}=await pool.query(`SELECT u.id,u.company_id,u.name,u.email,u.role,u.status,u.metadata,s.expires_at FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>NOW()`,[tokenHash(token)]);
-  return rows[0]||null;
+  const {rows}=await pool.query(`SELECT u.id,u.company_id,u.name,u.email,u.role AS account_role,u.status,u.metadata,s.active_app_role,s.expires_at,
+    COALESCE((SELECT array_agg(r.app_role ORDER BY r.app_role) FROM auth_user_app_roles r WHERE r.user_id=u.id),ARRAY[]::text[]) AS available_roles
+    FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>NOW()`,[tokenHash(token)]);
+  return scopeUserToSession(rows[0]);
 }
 async function requireAuth(req,res,next){ try{const u=await authUserFromReq(req);if(!u)return res.status(401).json({error:'not_authenticated'});if(String(u.status).toLowerCase()!=='active')return res.status(403).json({error:'account_disabled'});if(u.company_id){const c=await pool.query('SELECT status FROM companies WHERE id=$1',[u.company_id]);if(!c.rows[0]||String(c.rows[0].status).toLowerCase()!=='active')return res.status(403).json({error:'company_disabled'});}req.user=u;next()}catch(e){console.error(e);res.status(500).json({error:'auth_failed'})} }
 const requireSuper=(req,res,next)=> req.user?.role==='super_admin'?next():res.status(403).json({error:'super_admin_required'});
@@ -196,6 +199,7 @@ app.post('/api/auth/setup-super-admin', async (req,res)=>{
     const name=cleanString(req.body.name)||'Super Admin',email=cleanString(req.body.email).toLowerCase(),password=String(req.body.password||'');
     if(!email||password.length<8)return res.status(400).json({error:'email_and_password_required'});
     const out=await client.query("INSERT INTO auth_users(name,email,password_hash,role,status) VALUES($1,$2,$3,'super_admin','active') RETURNING id,name,email,role,status",[name,email,hashPassword(password)]);
+    await client.query("INSERT INTO auth_user_app_roles(user_id,app_role) VALUES($1,'fleet') ON CONFLICT DO NOTHING",[out.rows[0].id]);
     res.status(201).json(out.rows[0]);
   }catch(e){console.error(e);res.status(500).json({error:'setup_failed'})}finally{client.release()}
 });
@@ -218,13 +222,56 @@ app.post('/api/auth/login', async (req,res)=>{
     const {rows}=await pool.query('SELECT * FROM auth_users WHERE lower(email)=lower($1) LIMIT 1',[email]); const u=rows[0];
     if(!u||!verifyPassword(password,u.password_hash)){recordLoginFailure(req,email);return res.status(401).json({error:'invalid_credentials'});}
     if(String(u.status).toLowerCase()!=='active')return res.status(403).json({error:'account_disabled'});
+    if(u.role==='school_admin'||u.metadata?.schoolAdmin===true)return res.status(403).json({error:'school_portal_login_required',message:'Use the School Bus sign-in page for this account.'});
     clearLoginFailures(req,email);
-    const token=crypto.randomBytes(32).toString('hex'),expires=new Date(Date.now()+SESSION_DAYS*86400000);
-    await pool.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)',[tokenHash(token),u.id,expires]);
-    res.json({token,user:{id:u.id,companyId:u.company_id,name:u.name,email:u.email,role:u.role,status:u.status,metadata:u.metadata||{}},expiresAt:expires.toISOString()});
+    const assigned=(await pool.query('SELECT app_role FROM auth_user_app_roles WHERE user_id=$1 ORDER BY app_role',[u.id])).rows.map(row=>row.app_role);
+    const activeRole=defaultAppRole(u.role,assigned);if(!activeRole)return res.status(403).json({error:'no_app_role_assigned'});
+    const expires=new Date(Date.now()+SESSION_DAYS*86400000),token=crypto.randomBytes(32).toString('hex');
+    await pool.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at,active_app_role) VALUES($1,$2,$3,$4)',[tokenHash(token),u.id,expires,activeRole]);
+    const scoped=scopeUserToSession({...u,account_role:u.role,active_app_role:activeRole,available_roles:assigned});
+    res.set('Cache-Control','no-store').json({token,...authRolePayload(scoped),expiresAt:expires.toISOString()});
   }catch(e){console.error(e);res.status(500).json({error:'login_failed'})}
 });
-app.get('/api/auth/me',requireAuth,(req,res)=>res.json({id:req.user.id,companyId:req.user.company_id,name:req.user.name,email:req.user.email,role:req.user.role,status:req.user.status,metadata:req.user.metadata||{}}));
+app.get('/api/auth/me',requireAuth,(req,res)=>{const payload=authRolePayload(req.user);res.set('Cache-Control','no-store').json({...payload.user,activeRole:payload.activeRole,defaultRole:payload.defaultRole,availableRoles:payload.availableRoles})});
+app.post('/api/auth/switch-role',requireAuth,async(req,res)=>{
+  const requested=String(req.body?.role||'').trim().toLowerCase();
+  if(!['fleet','parent'].includes(requested))return res.status(400).json({error:'invalid_app_role',allowedRoles:req.user.available_roles});
+  if(!req.user.available_roles.includes(requested))return res.status(403).json({error:'app_role_not_assigned',allowedRoles:req.user.available_roles});
+  const token=crypto.randomBytes(32).toString('hex'),expires=new Date(Date.now()+SESSION_DAYS*86400000);
+  try{
+    await pool.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at,active_app_role) VALUES($1,$2,$3,$4)',[tokenHash(token),req.user.id,expires,requested]);
+    const scoped=scopeUserToSession({...req.user,account_role:req.user.account_role||req.user.role,active_app_role:requested});
+    res.set('Cache-Control','no-store').json({token,...authRolePayload(scoped),expiresAt:expires.toISOString(),previousTokenRemainsScoped:true});
+  }catch(error){console.error('Role switch failed:',error.message);res.status(500).json({error:'role_switch_failed'});}
+});
+app.post('/api/auth/link-parent-account',requireAuth,requireSuper,async(req,res)=>{
+  const companyId=Number(req.body?.companyId),fleetUserId=Number(req.body?.fleetUserId),parentUserId=Number(req.body?.parentUserId);
+  if(![companyId,fleetUserId,parentUserId].every(value=>Number.isSafeInteger(value)&&value>0)||fleetUserId===parentUserId)return res.status(400).json({error:'company_and_two_distinct_user_ids_required'});
+  if(String(req.body?.confirmation||'')!=='LINK PARENT ACCOUNT')return res.status(400).json({error:'confirmation_required',message:'Type LINK PARENT ACCOUNT to confirm.'});
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const fleet=(await client.query(`SELECT id,company_id,role,status,metadata FROM auth_users WHERE id=$1 AND company_id=$2 AND role IN ('company_admin','company_user') AND status='active' AND COALESCE(metadata->>'deleted','false')<>'true' FOR UPDATE`,[fleetUserId,companyId])).rows[0];
+    const parent=(await client.query(`SELECT id,company_id,role,status,metadata FROM auth_users WHERE id=$1 AND company_id=$2 AND role='parent' AND status='active' AND COALESCE(metadata->>'deleted','false')<>'true' FOR UPDATE`,[parentUserId,companyId])).rows[0];
+    if(!fleet||!parent){await client.query('ROLLBACK');return res.status(404).json({error:'active_same_company_fleet_and_parent_accounts_required'});}
+    await client.query(`INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'parent',$2) ON CONFLICT(user_id,app_role) DO NOTHING`,[fleetUserId,req.user.id]);
+    await client.query(`INSERT INTO school_child_parents(child_id,parent_user_id,relationship,created_at)
+      SELECT child_id,$1,relationship,created_at FROM school_child_parents WHERE parent_user_id=$2
+      ON CONFLICT(child_id,parent_user_id) DO NOTHING`,[fleetUserId,parentUserId]);
+    await client.query('DELETE FROM school_child_parents WHERE parent_user_id=$1',[parentUserId]);
+    const metadata={...(fleet.metadata&&typeof fleet.metadata==='object'?fleet.metadata:{}),schoolParent:true};
+    const oldPrefs=metadata.notificationPreferences,parentPrefs=parent.metadata?.notificationPreferences;
+    metadata.notificationPreferences=oldPrefs&&typeof oldPrefs==='object'?oldPrefs:(parentPrefs&&typeof parentPrefs==='object'?parentPrefs:{enabled:true,boarding:true,dropoff:true});
+    await client.query('UPDATE auth_users SET metadata=$1::jsonb,updated_at=NOW() WHERE id=$2',[JSON.stringify(metadata),fleetUserId]);
+    await client.query(`UPDATE auth_users SET status='inactive',metadata=COALESCE(metadata,'{}'::jsonb)||jsonb_build_object('deleted',true,'deletedAt',NOW(),'linkedToUserId',$1,'deletedBy',$2),updated_at=NOW() WHERE id=$3`,[fleetUserId,req.user.id,parentUserId]);
+    await client.query('DELETE FROM auth_sessions WHERE user_id=$1',[parentUserId]);
+    await client.query(`DELETE FROM mobile_push_outbox WHERE token_hash IN(SELECT token_hash FROM mobile_push_tokens WHERE user_id=$1)`,[parentUserId]);
+    const pushTokens=(await client.query('DELETE FROM mobile_push_tokens WHERE user_id=$1',[parentUserId])).rowCount||0;
+    await client.query(`INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'parent_account_linked','auth_user',$3,$4::jsonb)`,[companyId,req.user.id,String(fleetUserId),JSON.stringify({linkedParentUserId:parentUserId,transferredChildLinks:true,revokedParentPushTokens:pushTokens})]);
+    await client.query('COMMIT');
+    res.set('Cache-Control','no-store').json({ok:true,userId:fleetUserId,availableRoles:['fleet','parent'],defaultRole:'fleet',linkedParentUserId:parentUserId,childrenLinked:true,pushRegistrationRequired:pushTokens>0});
+  }catch(error){try{await client.query('ROLLBACK')}catch{};console.error('Parent account linking failed:',error.message);res.status(500).json({error:'parent_account_link_failed'});}finally{client.release();}
+});
 
 // News & Updates are stored in platform_state so announcements remain shared
 // between the Super Admin and company portals without a separate migration.
@@ -307,7 +354,7 @@ app.post('/api/companies/:id/support-login',requireAuth,requireSuper,async(req,r
   const u=(await pool.query("SELECT id FROM auth_users WHERE company_id=$1 AND role='company_admin' AND lower(status)='active' ORDER BY id LIMIT 1",[id])).rows[0];
   if(!u)return res.status(409).json({error:'Create an active company administrator first.'});
   const token=crypto.randomBytes(32).toString('hex'),expires=new Date(Date.now()+15*60000);
-  await pool.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)',[tokenHash(token),u.id,expires]);
+  await pool.query("INSERT INTO auth_sessions(token_hash,user_id,expires_at,active_app_role) VALUES($1,$2,$3,'fleet')",[tokenHash(token),u.id,expires]);
   console.info(JSON.stringify({event:'company_support_login',actor:req.user.id,companyId:id,userId:u.id,expiresAt:expires.toISOString()}));
   res.set('Cache-Control','no-store').json({token,expiresAt:expires.toISOString()});
  } catch(e){console.error('Company support login failed');res.status(500).json({error:'Unable to open the company account.'})}
@@ -316,9 +363,10 @@ app.post('/api/companies/:id/support-login',requireAuth,requireSuper,async(req,r
 app.post('/api/users/:id/support-login',requireAuth,requireSuper,async(req,res)=>{
  try{
   const id=Number(req.params.id);if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({error:'Invalid user.'});
-  const q=await pool.query("SELECT u.id,u.company_id,c.status AS company_status FROM auth_users u JOIN companies c ON c.id=u.company_id WHERE u.id=$1 AND lower(u.status)='active'",[id]);const u=q.rows[0];
+  const q=await pool.query("SELECT u.id,u.company_id,c.status AS company_status,u.role FROM auth_users u JOIN companies c ON c.id=u.company_id WHERE u.id=$1 AND lower(u.status)='active'",[id]);const u=q.rows[0];
   if(!u)return res.status(404).json({error:'Active user not found.'});if(String(u.company_status).toLowerCase()!=='active')return res.status(403).json({error:'Company is not active.'});
-  const token=crypto.randomBytes(32).toString('hex'),expires=new Date(Date.now()+15*60000);await pool.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)',[tokenHash(token),u.id,expires]);
+  const roles=(await pool.query('SELECT app_role FROM auth_user_app_roles WHERE user_id=$1',[u.id])).rows.map(row=>row.app_role),activeRole=defaultAppRole(u.role,roles);if(!activeRole)return res.status(403).json({error:'no_app_role_assigned'});
+  const token=crypto.randomBytes(32).toString('hex'),expires=new Date(Date.now()+15*60000);await pool.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at,active_app_role) VALUES($1,$2,$3,$4)',[tokenHash(token),u.id,expires,activeRole]);
   console.info(JSON.stringify({event:'user_support_login',actor:req.user.id,companyId:u.company_id,userId:u.id,expiresAt:expires.toISOString()}));res.set('Cache-Control','no-store').json({token,expiresAt:expires.toISOString()});
  }catch(e){console.error('User support login failed');res.status(500).json({error:'Unable to open the user account.'})}
 });
@@ -419,6 +467,7 @@ app.post('/api/companies', requireAuth, requireSuper, async (req,res)=>{
     const {rows}=await client.query(`INSERT INTO companies(name,email,status) VALUES($1,$2,$3) RETURNING id,name,email,status`,[name,email,req.body.status==='suspended'?'suspended':'active']);
     const company=rows[0];
     const u=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status) VALUES($1,$2,$3,$4,'company_admin','active') RETURNING id,name,email,role,status`,[company.id,adminName,email,hashPassword(password)]);
+    await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[u.rows[0].id,req.user.id]);
     await client.query(`INSERT INTO company_state(company_id,data,updated_by) VALUES($1,$2::jsonb,$3) ON CONFLICT(company_id) DO NOTHING`,[company.id,JSON.stringify({}),req.user.id]);
     await client.query(`INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'company_created','company',$3,$4::jsonb)`,[company.id,req.user.id,String(company.id),JSON.stringify({name,email})]);
     await client.query('UPDATE companies SET metadata=$1::jsonb WHERE id=$2',[JSON.stringify(metadata),company.id]);
@@ -443,7 +492,8 @@ app.put('/api/companies/:id', requireAuth, requireSuper, async (req,res)=>{
       else await client.query(`UPDATE auth_users SET name=$1,email=$2,status=$3,updated_at=NOW() WHERE id=$4`,[adminName,email,String(req.body.status||'active').toLowerCase()==='active'?'active':'disabled',au.rows[0].id]);
     } else {
       if(password.length<8){await client.query('ROLLBACK');return res.status(400).json({error:'password_required_for_company_admin'});}
-      await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status) VALUES($1,$2,$3,$4,'company_admin','active')`,[id,adminName,email,hashPassword(password)]);
+      const created=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status) VALUES($1,$2,$3,$4,'company_admin','active') RETURNING id`,[id,adminName,email,hashPassword(password)]);
+      await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[created.rows[0].id,req.user.id]);
     }
     await client.query(`INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'company_updated','company',$3,$4::jsonb)`,[id,req.user.id,String(id),JSON.stringify({name,email})]);
     await client.query('UPDATE companies SET metadata=$1::jsonb WHERE id=$2',[JSON.stringify(cleanMetadata(req.body.metadata)),id]);await client.query('COMMIT');res.json(rows[0]);
@@ -579,7 +629,6 @@ async function readLiveSnapshots(){
 function deriveStatus(live,metadata={},telemetry={}){
   if(!live) return 'offline';
   if(connectionStatus(live)==='offline') return 'offline';
-  if(live.valid===false) return 'untracked';
   const speedKph=Number(live.speed||0)*1.852;const minimum=Math.max(0,Number(metadata.accuracy?.minMovingSpeed??3));
   const attrs=parseAttrs(live.attributes);
   // Tracker I/O values may arrive as booleans, numbers, or strings. Normalize
@@ -588,6 +637,9 @@ function deriveStatus(live,metadata={},telemetry={}){
   const ignition=rememberedIgnition(attrs,telemetry);
   const ignitionOn=ignition===true;
   const ignitionOff=ignition===false;
+  // An online packet reporting ignition OFF means Parked even if speed/motion are stale.
+  if(ignitionOff) return 'parked';
+  if(live.valid===false) return 'untracked';
   const motionOn=booleanValue(attrs.motion ?? attrs.movement)===true;
   const motionOff=booleanValue(attrs.motion ?? attrs.movement)===false;
   if((live.speed!=null && speedKph>minimum)||(live.speed==null&&motionOn)) return 'moving';
@@ -612,10 +664,11 @@ async function vehicleSnapshotFor(user){
   try{const live=await readLiveSnapshots();liveRows=live.rows;source=live.source}catch(e){console.error('Live data warning:',e.response?.status||e.message)}
   const liveMap=new Map(liveRows.map(x=>[String(x.id),x])),detectedDrivers=await currentDrivers(pool,rows);
   const snapshots=rows.map(v=>{
-    if(v.expired){delete v.derived_state;return {...v,expired:true,live_access:false,access_status:'expired',access_message:VEHICLE_RENEWAL_MESSAGE,access:{status:'expired',code:'vehicle_expired',liveTracking:false,canOpen:false,message:VEHICLE_RENEWAL_MESSAGE},telemetry:{},mapped_io:[],current_driver:unidentified(),driver_identifier:null,status:'expired',connection_status:'expired',device_status:'expired',live_source:'blocked',last_update:null,position_time:null,position_valid:null,fix_time:null,device_time:null,latitude:null,longitude:null,speed_kph:null,course:null,altitude:null,ignition:null,motion:null,attributes:{}}}
+    const driverContact={name:String(v.metadata?.driverName||''),qid:String(v.metadata?.driverQid||''),mobile:String(v.metadata?.driverMobile||'')};
+    if(v.expired){delete v.derived_state;return {...v,driver_name:driverContact.name,driver_qid:driverContact.qid,driver_mobile:driverContact.mobile,driver_contact:driverContact,expired:true,live_access:false,access_status:'expired',access_message:VEHICLE_RENEWAL_MESSAGE,access:{status:'expired',code:'vehicle_expired',liveTracking:false,canOpen:false,message:VEHICLE_RENEWAL_MESSAGE},telemetry:{},mapped_io:[],current_driver:unidentified(),driver_identifier:null,status:'expired',connection_status:'expired',device_status:'expired',live_source:'blocked',last_update:null,position_time:null,position_valid:null,fix_time:null,device_time:null,latitude:null,longitude:null,speed_kph:null,course:null,altitude:null,ignition:null,motion:null,attributes:{}}}
     const l=liveMap.get(String(v.traccar_device_id)),attrs=parseAttrs(l?.attributes),telemetry=deriveTelemetry(l?{...l,attributes:attrs}:null,v.metadata,v.derived_state||{}),effectiveIgnition=rememberedIgnition(attrs,telemetry);delete v.derived_state;
     const location=resolveLivePosition(l),speedKph=location.source==='current'&&l?.speed!=null?Number((Number(l.speed||0)*1.852).toFixed(1)):null;
-    return {...v,expired:false,live_access:true,access_status:'active',access_message:'',access:{status:'active',code:null,liveTracking:true,canOpen:true,message:''},telemetry,mapped_io:l?.mapped_io||[],current_driver:detectedDrivers.get(String(v.id))||unidentified(),driver_identifier:detectedDrivers.get(String(v.id))?.identifier||null,status:deriveStatus(l,v.metadata,telemetry),connection_status:connectionStatus(l),device_status:l?.status||'unknown',live_source:source,location_source:location.source,last_update:newestTimestamp(l),position_time:location.serverTime,position_valid:l?.valid??null,fix_time:location.fixTime,device_time:location.deviceTime,latitude:location.latitude,longitude:location.longitude,speed_kph:speedKph,course:location.course,altitude:location.altitude,ignition:effectiveIgnition,motion:booleanValue(attrs.motion ?? attrs.movement),attributes:effectiveIgnition===null?attrs:{...attrs,ignition:effectiveIgnition}};
+    return {...v,driver_name:driverContact.name,driver_qid:driverContact.qid,driver_mobile:driverContact.mobile,driver_contact:driverContact,expired:false,live_access:true,access_status:'active',access_message:'',access:{status:'active',code:null,liveTracking:true,canOpen:true,message:''},telemetry,mapped_io:l?.mapped_io||[],current_driver:detectedDrivers.get(String(v.id))||unidentified(),driver_identifier:detectedDrivers.get(String(v.id))?.identifier||null,status:deriveStatus(l,v.metadata,telemetry),connection_status:connectionStatus(l),device_status:l?.status||'unknown',live_source:source,location_source:location.source,last_update:newestTimestamp(l),position_time:location.serverTime,position_valid:l?.valid??null,fix_time:location.fixTime,device_time:location.deviceTime,latitude:location.latitude,longitude:location.longitude,speed_kph:speedKph,course:location.course,altitude:location.altitude,ignition:effectiveIgnition,motion:booleanValue(attrs.motion ?? attrs.movement),attributes:effectiveIgnition===null?attrs:{...attrs,ignition:effectiveIgnition}};
   });
   const cachedAddresses=await reverseGeocoder.cachedMany(snapshots);
   return Promise.all(snapshots.map(async snapshot=>{
@@ -747,7 +800,8 @@ app.post('/api/vehicles', requireAuth, allowVehicleWrite, async (req,res)=>{
     if(resetIoMappings)await client.query('UPDATE vehicle_io_mappings SET enabled=false,updated_at=NOW() WHERE vehicle_id=$1',[saved.id]);
     await client.query('DELETE FROM device_admission_attempts WHERE imei=$1',[imei]);
     await client.query('COMMIT');
-    res.status(201).json({ok:true,action:existing.rowCount?'updated':'linked_or_created',vehicle:saved,trackingDevice:{id:device.id,name:device.name,uniqueId:device.uniqueId,status:device.status}});
+    const driverContact={name:String(metadata.driverName||''),qid:String(metadata.driverQid||''),mobile:String(metadata.driverMobile||'')};
+    res.status(201).json({ok:true,action:existing.rowCount?'updated':'linked_or_created',vehicle:{...saved,metadata,driverName:driverContact.name,driverQid:driverContact.qid,driverMobile:driverContact.mobile,driver_name:driverContact.name,driver_qid:driverContact.qid,driver_mobile:driverContact.mobile},trackingDevice:{id:device.id,name:device.name,uniqueId:device.uniqueId,status:device.status}});
   } catch(e){
     try{await client.query('ROLLBACK')}catch{}
     const status=e.response?.status,data=e.response?.data; console.error('Vehicle save error:',status||'',data||e.message);
@@ -886,7 +940,7 @@ app.post('/api/users',requireAuth,manageUsers,async(req,res)=>{
   const name=cleanString(req.body.name),email=cleanString(req.body.email).toLowerCase(),password=String(req.body.password||'');
   const role=req.body.role==='company_admin'?'company_admin':'company_user';
   if(!companyId||!name||!email.includes('@')||password.length<12)return res.status(400).json({error:'Name, company, valid email and a password of at least 12 characters are required.'});
-  try{const r=await pool.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status,metadata) VALUES($1,$2,$3,$4,$5,'active',$6::jsonb) RETURNING ${userFields}`,[companyId,name,email,hashPassword(password),role,JSON.stringify(cleanMetadata(req.body.metadata))]);res.status(201).json(r.rows[0])}catch(e){res.status(e.code==='23505'?409:500).json({error:e.code==='23505'?'Email already exists.':'Unable to create user.'})}
+  const client=await pool.connect();try{await client.query('BEGIN');const r=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status,metadata) VALUES($1,$2,$3,$4,$5,'active',$6::jsonb) RETURNING ${userFields}`,[companyId,name,email,hashPassword(password),role,JSON.stringify(cleanMetadata(req.body.metadata))]);await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[r.rows[0].id,req.user.id]);await client.query('COMMIT');res.status(201).json(r.rows[0])}catch(e){try{await client.query('ROLLBACK')}catch{};res.status(e.code==='23505'?409:500).json({error:e.code==='23505'?'Email already exists.':'Unable to create user.'})}finally{client.release()}
 });
 app.delete('/api/users',requireAuth,requireSuper,async(req,res)=>{
   if(String(req.body?.confirmation||'')!=='DELETE ALL USERS')return res.status(400).json({error:'Type DELETE ALL USERS to confirm.'});
@@ -914,6 +968,7 @@ app.put('/api/users/:id',requireAuth,manageUsers,async(req,res)=>{
     const name=cleanString(req.body.name),email=cleanString(req.body.email).toLowerCase(),password=String(req.body.password||'');
     if(!name||!email.includes('@')||(password&&password.length<12)){await client.query('ROLLBACK');return res.status(400).json({error:'Check name, email and password (minimum 12 characters).'})}
     const r=await client.query(`UPDATE auth_users SET name=$1,email=$2,role=$3,status=$4,password_hash=$5,metadata=$7::jsonb,updated_at=NOW() WHERE id=$6 RETURNING ${userFields}`,[name,email,role,status,password?hashPassword(password):u.password_hash,u.id,JSON.stringify(cleanMetadata(req.body.metadata))]);
+    await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[u.id,req.user.id]);
     if(password||status!=='active'||role!==u.role)await client.query('DELETE FROM auth_sessions WHERE user_id=$1',[u.id]);
     await client.query('COMMIT');res.json(r.rows[0]);
   }catch(e){await client.query('ROLLBACK');res.status(e.code==='23505'?409:500).json({error:e.code==='23505'?'Email already exists.':'Unable to update user.'})}finally{client.release()}
@@ -1036,6 +1091,8 @@ await pool.query(await readFile(new URL('./migration-driver-identification.sql',
 await pool.query(await readFile(new URL('./migration-device-admission.sql',import.meta.url),'utf8'));
 await pool.query(await readFile(new URL('./migration-diagnostics.sql',import.meta.url),'utf8'));
 await pool.query(await readFile(new URL('./migration-geocoding.sql',import.meta.url),'utf8'));
+await pool.query(await readFile(new URL('./migration-parent-bus.sql',import.meta.url),'utf8'));
+await pool.query(await readFile(new URL('./migration-auth-app-roles.sql',import.meta.url),'utf8'));
 await initializeDeviceProfiles(pool);
 registerDeviceProfileRoutes(app,{pool,requireAuth,requireSuper,readLiveSnapshots});
 await initializePush(app,{pool,requireAuth});

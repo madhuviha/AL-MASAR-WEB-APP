@@ -25,10 +25,8 @@ export function mapStatus(v,settings={},now=Date.now()){
  // their older motion flag set after the vehicle has stopped, so only fall
  // back to that flag when the device did not report a speed at all.
  const moving=speed!==null?speed>minimum:motion===true;
- // R12 trackers can leave a stale speed/motion combination after stopping.
- // Keep the display parked when that model explicitly reports ignition OFF.
- // Movement is still calculated above for backend safety decisions.
- const operating=isR12(v)&&ignition===false?'parked':moving?'moving':ignition===true?'idle':'parked';
+ // Ignition OFF takes precedence over speed or motion flags for every tracker.
+ const operating=ignition===false?'parked':moving?'moving':ignition===true?'idle':'parked';
  const hasPosition=finite(p?.latitude)&&finite(p?.longitude)&&Math.abs(Number(p.latitude))<=90&&Math.abs(Number(p.longitude))<=180;
  const requestedUntracked=Number(settings.untrackedMinutes);
  const configuredUntracked=Number.isFinite(requestedUntracked)&&requestedUntracked>0?requestedUntracked:15;

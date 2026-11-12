@@ -186,6 +186,21 @@ async function apiJson(path, options = {}) {
   }
   return body;
 }
+async function schoolAdminJson(path, options = {}) {
+  const token = getToken();
+  const response = await fetch(`/school-api/api/school/admin/accounts${path || ""}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers || {} }
+  });
+  let body = null;
+  try { body = await response.json(); } catch {}
+  if (!response.ok) {
+    const error = new Error(body?.error || "School account request failed.");
+    error.status = response.status;
+    throw error;
+  }
+  return body;
+}
 async function verifyPublicLoginBranding(settings) {
   const response = await fetch(`${API_BASE}/public/branding?verify=${Date.now()}`, { cache: "no-store" });
   if (!response.ok) throw new Error("The public login branding could not be checked.");
@@ -240,6 +255,7 @@ const nav = [
   ["news", "News & Updates", Megaphone],
   ["map", "Map", MapPin],
   ["companies", "Users", Users],
+  ["schoolAccounts", "School Accounts", Bus],
   ["vehicles", "Vehicles", Car],
   ["commands", "Commands", MonitorCog],
   ["events", "Events", Activity],
@@ -508,6 +524,55 @@ function Panel({ title, subtitle, children, className = "" }) {
   const t = useText();
   return <section className={"panel " + className}>{(title || subtitle) && <div className="panelTitle"><div>{title && <h2>{t(title)}</h2>}{subtitle && <p>{subtitle}</p>}</div></div>}{children}</section>;
 }
+function SchoolAccountsPage({ companies }) {
+  const activeCompanies = useMemo(() => (Array.isArray(companies) ? companies : []).filter(company => company && typeof company === "object" && String(company.status || "active").toLowerCase() === "active"), [companies]);
+  const [accounts, setAccounts] = useState([]), [companyId, setCompanyId] = useState(""), [schoolName, setSchoolName] = useState(""), [adminName, setAdminName] = useState(""), [email, setEmail] = useState(""), [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false), [message, setMessage] = useState("");
+  const load = async () => {
+    setLoading(true);
+    try {
+      const result = await schoolAdminJson("");
+      const rows = Array.isArray(result) ? result : Array.isArray(result?.accounts) ? result.accounts : [];
+      setAccounts(rows.filter(account => account && typeof account === "object"));
+      setMessage("");
+    } catch (error) {
+      setMessage("Could not load school accounts: " + (error?.message || "Unknown error"));
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+  useEffect(() => { if (!companyId && activeCompanies[0]) setCompanyId(String(activeCompanies[0].id)); }, [activeCompanies, companyId]);
+  const accountRows = Array.isArray(accounts) ? accounts : [];
+  const accountByCompany = new globalThis.Map(accountRows.map(account => [String(account.companyId), account]));
+  const availableCompanies = activeCompanies.filter(company => !accountByCompany.has(String(company.id)));
+  async function create(event) {
+    event.preventDefault(); setSaving(true); setMessage("");
+    try {
+      await schoolAdminJson("", { method: "POST", body: JSON.stringify({ companyId: Number(companyId), schoolName: schoolName.trim(), adminName: adminName.trim(), email: email.trim(), password }) });
+      setSchoolName(""); setAdminName(""); setEmail(""); setPassword(""); await load(); setMessage("School admin created. This login is separate from Fleet Management.");
+    } catch (error) { setMessage("School admin was not created: " + error.message); }
+    finally { setSaving(false); }
+  }
+  return <div className="page"><PageHead title="School Accounts" subtitle="Create a separate School Bus administrator for an existing customer company." />
+    <Panel title="Create school administrator" subtitle="The school login uses its own API session and permissions. Fleet users and fleet access are not changed.">
+      <form className="formGrid" onSubmit={create}>
+        <label>Company<select required value={companyId} onChange={event => setCompanyId(event.target.value)}><option value="">Select a company</option>{activeCompanies.map(company => <option key={company.id} value={company.id}>{company.name} · ID {company.id}</option>)}</select></label>
+        <label>School display name<input required value={schoolName} onChange={event => setSchoolName(event.target.value)} placeholder="Lebanese School" /></label>
+        <label>School admin name<input required value={adminName} onChange={event => setAdminName(event.target.value)} placeholder="School administrator" /></label>
+        <label>School admin email<input required type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="admin@school.qa" /></label>
+        <label>Temporary password<input required type="password" minLength={12} value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 12 characters" /></label>
+        <div className="modalActions"><button className="green" disabled={saving || !availableCompanies.some(company => String(company.id) === companyId)}><Save />{saving ? "Creating…" : "Create school account"}</button></div>
+      </form>
+      {!activeCompanies.length && <div className="empty">Create an active company first, then add its School Bus account here.</div>}
+      {activeCompanies.length > 0 && !availableCompanies.length && <div className="empty">Every active company already has a School Bus account.</div>}
+      {message && <p className={message.includes("not created") || message.includes("Could not") ? "errorText" : "successText"} role="status">{message}</p>}
+    </Panel>
+    <Panel title="School administrator accounts" subtitle="One separate School Bus login per company.">
+      {loading ? <div className="empty">Loading school accounts…</div> : accountRows.length ? <div className="tableWrap"><table><thead><tr><th>School</th><th>Company</th><th>Admin</th><th>Email</th><th>Status</th></tr></thead><tbody>{accountRows.map((account, index) => <tr key={account.companyId ?? account.adminUserId ?? index}><td><b>{account.schoolName || "—"}</b></td><td>{activeCompanies.find(company => String(company.id) === String(account.companyId))?.name || `Company ${account.companyId ?? "—"}`}</td><td>{account.adminName || "—"}</td><td>{account.adminEmail || "—"}</td><td><StatusPill value={account.status} /></td></tr>)}</tbody></table></div> : <div className="empty">No School Bus accounts have been created yet.</div>}
+    </Panel>
+  </div>;
+}
 function Info({ label, value }) {
   return <div className="infoRow"><span>{label}</span><b>{value ?? "\u2014"}</b></div>;
 }
@@ -717,7 +782,8 @@ function CompanyForm({ data, company, onClose, onSave }) {
       setTab("access");
       return;
     }
-    onSave(company?.name, f);
+    const permissions = Object.fromEntries(Object.entries(f.permissions || {}).filter(([key]) => key !== "School / Parent Bus"));
+    onSave(company?.name, { ...f, permissions });
   }}><Save />Save Customer</button></div></Modal>;
 }
 function SubAccountsModal({ data, company, onClose, onSave }) {
@@ -809,7 +875,8 @@ function ReferenceUserAccountForm({ data, user, company, onClose, onSave }) {
     if (!isEdit && draft.password.length < 12) return alert("Password must contain at least 12 characters.");
     if (!baseMapAccessKeys.some((key) => draft.mapAccess[key] !== false)) return alert("Select at least one base map for this customer.");
     const savedRole = isCompanyAdminAccount ? "Company Admin" : draft.group;
-    onSave(selectedCompany, { ...user || {}, name, firstName: draft.firstName, lastName: draft.lastName, email: draft.email, password: draft.password, status: draft.active ? "Active" : "Inactive", mobile: draft.phone, address: draft.address, personalCode: draft.personalCode, birthDate: draft.birthDate, role: savedRole, group: savedRole, manager: draft.manager, mapAccess: draft.mapAccess, vehicleIds: isCompanyAdminAccount ? companyVehicles.map((vehicle) => String(vehicle.id)) : draft.vehicleIds, permissions: draft.permissions, vehicleLimit: draft.vehicleLimitEnabled ? Number(draft.vehicleLimit) || 0 : null, expirationDate: draft.expirationEnabled ? draft.expirationDate : "", historyAccessDays: Math.min(limit, Number(draft.historyAccessDays) || limit), sendCreatedEmail: draft.sendCreatedEmail });
+    const permissions = Object.fromEntries(Object.entries(draft.permissions || {}).filter(([key]) => key !== "School / Parent Bus"));
+    onSave(selectedCompany, { ...user || {}, name, firstName: draft.firstName, lastName: draft.lastName, email: draft.email, password: draft.password, status: draft.active ? "Active" : "Inactive", mobile: draft.phone, address: draft.address, personalCode: draft.personalCode, birthDate: draft.birthDate, role: savedRole, group: savedRole, manager: draft.manager, mapAccess: draft.mapAccess, vehicleIds: isCompanyAdminAccount ? companyVehicles.map((vehicle) => String(vehicle.id)) : draft.vehicleIds, permissions, vehicleLimit: draft.vehicleLimitEnabled ? Number(draft.vehicleLimit) || 0 : null, expirationDate: draft.expirationEnabled ? draft.expirationDate : "", historyAccessDays: Math.min(limit, Number(draft.historyAccessDays) || limit), sendCreatedEmail: draft.sendCreatedEmail });
   };
   return <Modal title={isEdit ? "Edit user" : "Add new user"} onClose={onClose} className="referenceUserModal"><div className="referenceUserTabs">{tabs.map(([key, label]) => <button type="button" key={key} className={tab === key ? "activeTab" : ""} onClick={() => setTab(key)}>{label}</button>)}</div>{tab === "main" && <div className="legacyUserForm referenceUserMain"><label className="checkLine span2"><input type="checkbox" checked={draft.active} onChange={(e) => f("active", e.target.checked)} /> Active</label><label>First name:<input value={draft.firstName} onChange={(e) => f("firstName", e.target.value)} /></label><label>Last name:<input value={draft.lastName} onChange={(e) => f("lastName", e.target.value)} /></label><label>Personal code:<input value={draft.personalCode} onChange={(e) => f("personalCode", e.target.value)} /></label><label>Birth date:<input type="date" value={draft.birthDate} onChange={(e) => f("birthDate", e.target.value)} /></label><label className="span2">Address:<input value={draft.address} onChange={(e) => f("address", e.target.value)} /></label><label className="span2">Email:<input type="email" value={draft.email} onChange={(e) => f("email", e.target.value)} /></label><label className="span2">Phone number:<input value={draft.phone} onChange={(e) => f("phone", e.target.value)} /></label><label>Group*:<select value={draft.group} onChange={(e) => f("group", e.target.value)}>{groupOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label>Manager:<select value={draft.manager} onChange={(e) => f("manager", e.target.value)}><option value="">-- Select --</option>{data.companies.filter(isAlMasarCompany).map((c) => <option key={c.id} value={c.name}>{displayCompanyName(c.name)}</option>)}</select></label><fieldset className="span2 legacyMaps"><legend>Available maps:</legend><div className="legacyMapActions"><button type="button" onClick={() => f("mapAccess", allUserMapAccess())}>Select all</button><button type="button" onClick={() => f("mapAccess", defaultUserMapAccess())}>Deselect all</button></div>{mapAccessOptions.map(([key, label]) => <label key={key}><input type="checkbox" checked={draft.mapAccess[key] === true} onChange={(e) => f("mapAccess", { ...draft.mapAccess, [key]: e.target.checked })} />{label}</label>)}</fieldset><label>Vehicle limit:<span className="legacyOptional"><input type="checkbox" checked={draft.vehicleLimitEnabled} onChange={(e) => f("vehicleLimitEnabled", e.target.checked)} /><input type="number" min="0" disabled={!draft.vehicleLimitEnabled} value={draft.vehicleLimit} onChange={(e) => f("vehicleLimit", e.target.value)} /></span></label><label>Expiration date:<span className="legacyOptional"><input type="checkbox" checked={draft.expirationEnabled} onChange={(e) => f("expirationEnabled", e.target.checked)} /><input type="datetime-local" disabled={!draft.expirationEnabled} value={draft.expirationDate} onChange={(e) => f("expirationDate", e.target.value)} /></span></label><fieldset className="span2 legacyPassword"><legend>Password change</legend><label><input type="radio" name="referencePasswordMode" checked={draft.passwordMode === "auto"} onChange={() => {
     f("passwordMode", "auto");
@@ -1637,6 +1704,7 @@ function App() {
   else if (page === "news") body = <NewsUpdatesPage data={data} setData={setData} />;
   else if (page === "map") body = <MapPage data={data} />;
   else if (page === "companies") body = <CompanyUsersPage data={data} setData={setData} />;
+  else if (page === "schoolAccounts") body = <SchoolAccountsPage companies={data.companies} />;
   else if (page === "events") body = <EventsPage data={data} />;
   else if (page === "vehicles") body = <VehiclesPage data={data} setData={setData} companyFilter={companyFilter} setCompanyFilter={setCompanyFilter} />;
   else if (page === "commands") body = <SuperCommandsPage data={data} />;

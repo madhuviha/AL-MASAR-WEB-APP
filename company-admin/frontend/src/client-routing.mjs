@@ -5,7 +5,7 @@ const companyPages = new Set([
 ]);
 
 const adminPages = new Set([
-  'dashboard', 'news', 'map', 'companies', 'vehicles', 'events', 'emailTemplates',
+  'dashboard', 'news', 'map', 'companies', 'schoolAccounts', 'vehicles', 'events', 'emailTemplates',
   'smsTemplates', 'mapIcons', 'vehicleIcons', 'expenseTypes', 'privacyPolicy',
   'gpsActivation', 'apnConfig', 'diemRates', 'commandTemplates',
   'emailSettings', 'settings', 'billingGateway', 'trackingPorts', 'language',

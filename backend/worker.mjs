@@ -29,7 +29,7 @@ export function startRuleWorker({pool,readLiveSnapshots,parseAttrs}){
     if(l?.valid===false)speed=null;
     const minimum=Math.max(0,Number(v.metadata?.accuracy?.minMovingSpeed??3));
     const moving=l?.speed!=null?speed>minimum:motion===true;
-    return {...v,telemetry,position:l?{latitude:l.latitude,longitude:l.longitude,valid:l.valid,serverTime:time,attributes:{...a,...(ignition===null?{}:{ignition})}}:null,speed,state:!fresh?'offline':signalFresh&&moving?'moving':signalFresh&&ignition===true?'idle':'parked'};
+    return {...v,telemetry,position:l?{latitude:l.latitude,longitude:l.longitude,valid:l.valid,serverTime:time,attributes:{...a,...(ignition===null?{}:{ignition})}}:null,speed,state:!fresh?'offline':ignition===false?'parked':signalFresh&&moving?'moving':signalFresh&&ignition===true?'idle':'parked'};
    });
    const normalized={...data,...runtime.rows[0]?.data};for(const key of ['drivers','alerts','alertRules','localGeofences'])normalized[key]=(data[key]||[]).map(x=>({...x,companyId:co.id}));
    const next=evaluateAlerts(normalized,company,vehicles);next.alerts=recentAlerts(next.alerts);

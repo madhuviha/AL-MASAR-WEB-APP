@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>School / Parent Bus – Style Options</title>
+  <style>
+    :root{--green:#0ca45b;--green-dark:#087d49;--green-soft:#eefaf3;--ink:#12324e;--muted:#6d8298;--line:#cbd9e5;--bg:#f4f8fb}
+    *{box-sizing:border-box}body{margin:0;padding:32px;background:var(--bg);font:14px "Segoe UI",Arial,sans-serif;color:var(--ink)}
+    h1{margin:0 0 8px;font-size:26px}.intro{margin:0 0 26px;color:var(--muted)}
+    .grid{max-width:1120px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.box{background:#fff;border:1px solid var(--line);padding:20px;min-height:180px;display:flex;flex-direction:column;justify-content:space-between}.box h2{margin:0;font-size:19px}.box p{margin:8px 0;color:var(--muted);line-height:1.45}.actions{display:flex;gap:9px;margin-top:18px}.actions button{height:38px;padding:0 16px;border:1px solid var(--green);border-radius:0;font-weight:700;cursor:pointer}.create{background:var(--green);color:#fff}.open{background:#fff;color:var(--green-dark)}
+    .style-title{margin:0 0 12px;color:var(--green-dark);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+    .style-2{padding:0;overflow:hidden}.style-2 .content{padding:20px}.style-2 .style-title{margin:0;padding:12px 20px;background:var(--green);color:#fff}.style-2 .actions{padding:0 20px 20px;margin-top:0}
+    .style-3{border:2px solid var(--green);background:var(--green-soft)}
+    .style-4{display:grid;grid-template-columns:56px 1fr;gap:16px;align-items:start}.icon{width:56px;height:56px;background:var(--green);color:#fff;display:grid;place-items:center;font-size:25px;font-weight:800}.style-4 .actions{grid-column:2}
+    .style-5{min-height:0;display:grid;grid-template-columns:1fr auto;align-items:center;gap:18px;padding:16px}.style-5 .actions{margin:0}.style-5 p{margin-bottom:0}
+    @media(max-width:760px){body{padding:18px}.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <h1>School / Parent Bus – five simple styles</h1>
+  <p class="intro">Every option uses the same two actions: <b>+ Create</b> and <b>Open</b>.</p>
+  <main class="grid">
+    <article class="box style-1"><div><div class="style-title">Style 1 · Flat</div><h2>Children</h2><p>Add and manage student profiles, RFID cards, and assigned buses.</p></div><div class="actions"><button class="create">+ Create</button><button class="open">Open</button></div></article>
+    <article class="box style-2"><div class="style-title">Style 2 · Green header</div><div class="content"><h2>Bus routes</h2><p>Connect buses to schools, home stops, and live route activity.</p></div><div class="actions"><button class="create">+ Create</button><button class="open">Open</button></div></article>
+    <article class="box style-3"><div><div class="style-title">Style 3 · Green outline</div><h2>Parent accounts</h2><p>Create parent logins and link each parent to one or more children.</p></div><div class="actions"><button class="create">+ Create</button><button class="open">Open</button></div></article>
+    <article class="box style-4"><div class="icon">+</div><div><div class="style-title">Style 4 · Icon panel</div><h2>Geofences</h2><p>Set the school boundary and home-stop locations.</p></div><div class="actions"><button class="create">+ Create</button><button class="open">Open</button></div></article>
+    <article class="box style-5"><div><div class="style-title">Style 5 · Compact row</div><h2>Drivers</h2><p>Manage driver name, QID, mobile, and assigned bus.</p></div><div class="actions"><button class="create">+ Create</button><button class="open">Open</button></div></article>
+  </main>
+</body>
+</html>

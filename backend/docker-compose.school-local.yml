@@ -1,0 +1,22 @@
+services:
+  school-postgres:
+    image: postgres:16-alpine
+    container_name: masar-school-local-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: masar_school_dev
+      POSTGRES_USER: masar_school_dev
+      POSTGRES_PASSWORD: ${SCHOOL_DEV_DB_PASSWORD:?Set SCHOOL_DEV_DB_PASSWORD in .env.school.local}
+    ports:
+      - "127.0.0.1:15433:5432"
+    volumes:
+      - masar-school-local-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  masar-school-local-data:
+    name: masar-school-local-data
