@@ -91,12 +91,19 @@ const stateColor=s=>({expired:'#dc2626',moving:'#16b364',idle:'#f5a524',parked:'
 const fileDownload=(name,body,type='text/plain')=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
 const csv=v=>`"${String(v??'').replaceAll('"','""')}"`;
 const hav=(a,b)=>{const R=6371000,toR=n=>n*Math.PI/180,dLat=toR(b.lat-a.lat),dLon=toR(b.lng-a.lng),la1=toR(a.lat),la2=toR(b.lat);const q=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(q))};
-const clusterVehicleRows=(rows,radiusMeters=600)=>{
+const clusterVehicleRows=(rows,zoom=11)=>{
   const groups=[];
   rows.forEach(vehicle=>{
     const lat=Number(vehicle.position?.latitude),lng=Number(vehicle.position?.longitude);
     if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
-    const group=groups.find(item=>hav(item.center,{lat,lng})<=radiusMeters);
+    const group=groups.find(item=>{
+      // Keep dense markers grouped at city zoom, then shrink the distance with
+      // zoom so individual vehicles appear once map space is available.
+      const latitude=(item.center.lat+lat)/2;
+      const metersPerPixel=156543.03392*Math.cos(latitude*Math.PI/180)/2**zoom;
+      const radiusMeters=Math.min(600,72*metersPerPixel);
+      return hav(item.center,{lat,lng})<=radiusMeters;
+    });
     if(!group){groups.push({center:{lat,lng},items:[vehicle]});return}
     group.items.push(vehicle);
     group.center={
@@ -159,6 +166,7 @@ function referenceMapMarker(category,state,name,speed=0,image='',fresh=false){
 
 function MapFocus({pos,follow=false,points=[]}){const map=useMap(),fitted=useRef(false),focused=useRef(null);useEffect(()=>{map.invalidateSize()},[map]);useEffect(()=>{if(Number.isFinite(pos?.latitude)&&Number.isFinite(pos?.longitude)){const changed=focused.current!==pos.deviceId;if(changed||follow){map.setView([pos.latitude,pos.longitude],changed?14:map.getZoom(),{animate:false});focused.current=pos.deviceId}}else if(!fitted.current&&points.length){const bounds=L.latLngBounds(points);if(bounds.isValid()){map.fitBounds(bounds,{padding:[40,40],maxZoom:13,animate:false});fitted.current=true}}},[pos?.deviceId,pos?.latitude,pos?.longitude,follow,points.length,map]);return null}
 function MapDefaultView({center,zoom,enabled}){const map=useMap(),applied=useRef('');useEffect(()=>{if(!enabled||!Array.isArray(center)||center.length!==2||!center.every(Number.isFinite))return;const key=`${center[0]}:${center[1]}:${zoom}`;if(applied.current===key)return;map.setView(center,zoom,{animate:false});applied.current=key},[map,enabled,center?.[0],center?.[1],zoom]);return null}
+function MapZoomTracker({onZoomChange}){const map=useMap();useEffect(()=>{const update=()=>onZoomChange(map.getZoom());update();map.on('zoomend',update);return()=>map.off('zoomend',update)},[map,onZoomChange]);return null}
 
 function FitFleetRequest({points,request}){const map=useMap();useEffect(()=>{if(request&&points.length){const bounds=L.latLngBounds(points);if(bounds.isValid())map.fitBounds(bounds,{padding:[80,80],maxZoom:16})}},[request,map]);return null}
 function PickMap({mode,onCircle,onPolygon}){useMapEvents({click:e=>mode==='circle'?onCircle(e.latlng):onPolygon(e.latlng)});return null}
@@ -1119,6 +1127,7 @@ function MapPage({vehicles,selected,setSelected,setPage,alerts,store,setStore,co
   // Start clustering enabled for the current map behavior. The v2 key avoids a
   // stale "off" value from older map builds hiding clusters after an update.
   const [clusterEnabled,setClusterEnabled]=useState(()=>localStorage.getItem('inviha.mapClustering.v2')!=='0');
+  const [clusterZoom,setClusterZoom]=useState(11);
   const [clusterReveal,setClusterReveal]=useState(null);
   useEffect(()=>{localStorage.setItem('inviha.mapClustering.v2',clusterEnabled?'1':'0')},[clusterEnabled]);
   const [follow,setFollow]=useState(false);const markerRefs=useRef({});useEffect(()=>{if(selected?.id!=null&&layers.vehicles)markerRefs.current[String(selected.id)]?.openPopup()},[selected?.id]);
@@ -1140,7 +1149,7 @@ function MapPage({vehicles,selected,setSelected,setPage,alerts,store,setStore,co
     .filter(v=>Number.isFinite(v.position?.latitude)&&Number.isFinite(v.position?.longitude))
     .map(v=>[v.position.latitude,v.position.longitude]);
   const locatedVehicles=useMemo(()=>vehicles.filter(v=>Number.isFinite(v.position?.latitude)&&Number.isFinite(v.position?.longitude)),[vehicles]);
-  const vehicleClusters=useMemo(()=>clusterVehicleRows(locatedVehicles),[locatedVehicles]);
+  const vehicleClusters=useMemo(()=>clusterVehicleRows(locatedVehicles,clusterZoom),[locatedVehicles,clusterZoom]);
   const revealedGroup=clusterReveal?vehicleClusters.find(group=>`cluster-${group.items.map(vehicle=>vehicle.id).sort().join('-')}`===clusterReveal.key):null;
   const singleMapVehicles=clusterEnabled?[...vehicleClusters.filter(group=>group.items.length===1).map(group=>group.items[0]),...(revealedGroup?.items||[])]:locatedVehicles;
   const revealVehicleCluster=(key,map)=>{
@@ -1221,6 +1230,7 @@ function MapPage({vehicles,selected,setSelected,setPage,alerts,store,setStore,co
         <MapContainer ref={mapRef} zoomControl={false} zoomAnimation={true} fadeAnimation={true} markerZoomAnimation={true} center={configuredCenter} zoom={configuredZoom} minZoom={2}>
 
           <Basemap base={mapStyle}/>
+          <MapZoomTracker onZoomChange={setClusterZoom}/>
           <MapDefaultView center={configuredCenter} zoom={configuredZoom} enabled={!selected?.position&&!initialFocusPoints.length}/>
 
           {layers.geofences&&geofences.map(g=>
