@@ -5,26 +5,28 @@ import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import pg from 'pg';
 import {initializeParentBus} from './parent-bus.mjs';
+import {boundedInteger,consumeLoginAttempt,LOGIN_ATTEMPT_LIMIT_MESSAGE,logLoginFailure,parseAllowedOrigins,sessionDays} from './security-controls.mjs';
 
 dotenv.config();
 const {Pool}=pg;
 const app=express();
-const pool=new Pool({connectionString:process.env.DATABASE_URL,max:Number(process.env.SCHOOL_DB_POOL_MAX||8),idleTimeoutMillis:30000,connectionTimeoutMillis:5000});
-const livePool=process.env.TRACCAR_DATABASE_URL?new Pool({connectionString:process.env.TRACCAR_DATABASE_URL,max:Number(process.env.SCHOOL_TRACKER_DB_POOL_MAX||4),idleTimeoutMillis:30000,connectionTimeoutMillis:4000}):null;
-const PORT=Number(process.env.SCHOOL_API_PORT||3002);
-const SESSION_DAYS=Math.max(1,Number(process.env.SCHOOL_SESSION_DAYS||7));
+const pool=new Pool({connectionString:process.env.DATABASE_URL,max:boundedInteger(process.env.SCHOOL_DB_POOL_MAX,8,1,100),idleTimeoutMillis:30000,connectionTimeoutMillis:5000});
+const livePool=process.env.TRACCAR_DATABASE_URL?new Pool({connectionString:process.env.TRACCAR_DATABASE_URL,max:boundedInteger(process.env.SCHOOL_TRACKER_DB_POOL_MAX,4,1,50),idleTimeoutMillis:30000,connectionTimeoutMillis:4000}):null;
+const PORT=boundedInteger(process.env.SCHOOL_API_PORT,3002,1,65535);
+const SESSION_DAYS=sessionDays(process.env.SCHOOL_SESSION_DAYS);
 const tokenHash=token=>crypto.createHash('sha256').update(String(token||'')).digest('hex');
 const clean=value=>String(value??'').trim();
 const parseAttrs=value=>{if(value&&typeof value==='object')return value;try{return JSON.parse(value||'{}')}catch{return {}}};
 const hashPassword=(password,salt=crypto.randomBytes(16).toString('hex'))=>`${salt}:${crypto.scryptSync(String(password),salt,64).toString('hex')}`;
 const verifyPassword=(password,stored)=>{try{const [salt,hash]=String(stored||'').split(':');if(!salt||!hash)return false;return crypto.timingSafeEqual(crypto.scryptSync(String(password),salt,64),Buffer.from(hash,'hex'))}catch{return false}};
 const schoolKeys=new Set(['schoolBuses','schoolBranches','schoolChildren','schoolParents','schoolScans','schoolRoutes','drivers','schoolAttenders','schoolCoordinators','schoolRfidCards','schoolRfidReaders','schoolSettings','companyProfile','companyPreferences','headerBanner']);
-const origins=new Set(String(process.env.SCHOOL_ALLOWED_ORIGINS||'https://trackschoolbus.masar.qa,https://track.almasar.qa,http://localhost:5173,http://localhost:5177,http://localhost:5178,http://127.0.0.1:5173,http://127.0.0.1:5177,http://127.0.0.1:5178').split(',').map(x=>x.trim()).filter(Boolean));
+const origins=parseAllowedOrigins(process.env.SCHOOL_ALLOWED_ORIGINS,'https://trackschoolbus.masar.qa,https://track.almasar.qa,http://localhost:5173,http://localhost:5177,http://localhost:5178,http://127.0.0.1:5173,http://127.0.0.1:5177,http://127.0.0.1:5178');
+if(String(process.env.SCHOOL_ALLOWED_ORIGINS||'').split(',').some(origin=>origin.trim()==='*'))console.warn('Ignoring wildcard SCHOOL_ALLOWED_ORIGINS; configure explicit portal origins.');
 app.disable('x-powered-by');
 app.set('trust proxy','loopback');
-app.use(cors({origin(origin,callback){if(!origin||origins.has('*')||origins.has(origin))return callback(null,true);return callback(new Error('origin_not_allowed'))},credentials:false}));
+app.use(cors({origin(origin,callback){callback(null,!origin||origins.has(origin))},credentials:false}));
 app.use(express.json({limit:'8mb'}));
-app.use((req,res,next)=>{res.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'strict-origin-when-cross-origin'});if(req.path.startsWith('/api/'))res.set({'Cache-Control':'no-store','Pragma':'no-cache'});next()});
+app.use((req,res,next)=>{res.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'strict-origin-when-cross-origin','Permissions-Policy':'camera=(), microphone=(), geolocation=(self)',"Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});if(req.path.startsWith('/api/'))res.set({'Cache-Control':'no-store','Pragma':'no-cache'});if(req.secure&&(process.env.NODE_ENV==='production'||process.env.ENABLE_HSTS==='true'))res.set('Strict-Transport-Security','max-age=31536000');next()});
 
 const trackingApi=axios.create({baseURL:process.env.TRACCAR_BASE_URL||'http://127.0.0.1:8082',auth:{username:process.env.TRACCAR_ADMIN_EMAIL||'',password:process.env.TRACCAR_ADMIN_PASSWORD||''},timeout:10000,headers:{'Content-Type':'application/json'}});
 let liveCache=null,liveCacheAt=0,livePending=null;
@@ -48,12 +50,6 @@ async function loadLiveRaw(){
   return {source:'api',rows:devices.map(d=>{const p=byDevice.get(String(d.id))||{};return{id:d.id,name:d.name,uniqueid:d.uniqueId,status:d.status,lastupdate:d.lastUpdate,positionid:d.positionId,protocol:p.protocol,latitude:p.latitude,longitude:p.longitude,speed:p.speed,course:p.course,altitude:p.altitude,fixtime:p.fixTime,devicetime:p.deviceTime,servertime:p.serverTime,valid:p.valid,attributes:p.attributes||{}}})};
 }
 async function readLiveSnapshots(){const now=Date.now();if(liveCache&&now-liveCacheAt<2500)return liveCache;if(livePending)return livePending;livePending=loadLiveRaw().then(value=>{liveCache=value;liveCacheAt=Date.now();return value}).finally(()=>{livePending=null});return livePending}
-
-const failedLogins=new Map();
-function loginKey(req,email){return `${req.ip||'unknown'}:${String(email||'').toLowerCase()}`}
-function loginBlocked(req,email){const now=Date.now(),key=loginKey(req,email),row=failedLogins.get(key);if(row&&row.until<=now){failedLogins.delete(key);return false}return Boolean(row&&row.count>=8)}
-function recordFailure(req,email){const key=loginKey(req,email),now=Date.now(),row=failedLogins.get(key);if(!row||row.until<=now)failedLogins.set(key,{count:1,until:now+900000});else row.count++}
-const clearFailures=(req,email)=>failedLogins.delete(loginKey(req,email));
 
 async function schoolAuth(req,res,next){
   try{
@@ -88,17 +84,17 @@ app.get('/api/health',async(_req,res)=>{try{await pool.query('SELECT 1');res.jso
 
 app.post('/api/school/auth/login',async(req,res)=>{
   const email=clean(req.body?.email).toLowerCase(),password=String(req.body?.password||'');
-  if(loginBlocked(req,email)){res.set('Retry-After','900');return res.status(429).json({error:'too_many_login_attempts'})}
   try{
+    const attempt=await consumeLoginAttempt(pool,email);
+    if(!attempt.allowed){logLoginFailure(req,email,'rate_limited');res.set('Retry-After',String(attempt.retryAfterSeconds));return res.status(429).json({error:'too_many_login_attempts',message:LOGIN_ATTEMPT_LIMIT_MESSAGE})}
     const row=(await pool.query(`SELECT u.id,u.company_id,u.name,u.email,u.password_hash,u.role,u.status,u.metadata,
       sa.display_name AS school_name,sa.status AS school_status,c.status AS company_status
       FROM auth_users u JOIN school_accounts sa ON sa.company_id=u.company_id JOIN companies c ON c.id=u.company_id
       WHERE lower(u.email)=lower($1) LIMIT 1`,[email])).rows[0];
     const allowedAdmin=row?.role==='school_admin'&&row?.metadata?.schoolAdmin===true;
     const allowedParent=row?.role==='parent'&&row?.metadata?.schoolParent===true;
-    if(!row||!verifyPassword(password,row.password_hash)||(!allowedAdmin&&!allowedParent)){recordFailure(req,email);return res.status(401).json({error:'invalid_credentials'})}
+    if(!row||!verifyPassword(password,row.password_hash)||(!allowedAdmin&&!allowedParent)){logLoginFailure(req,email,'invalid_credentials');return res.status(401).json({error:'invalid_credentials'})}
     if(row.status!=='active'||row.school_status!=='active'||row.company_status!=='active'){return res.status(403).json({error:'school_account_disabled'})}
-    clearFailures(req,email);
     const token=crypto.randomBytes(32).toString('hex'),expiresAt=new Date(Date.now()+SESSION_DAYS*86400000);
     await pool.query('INSERT INTO school_portal_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)',[tokenHash(token),row.id,expiresAt]);
     const {password_hash:_hidden,...user}=row;
@@ -167,7 +163,7 @@ async function schoolVehicles(companyId){
         AND COALESCE(v.metadata->>'archived','false')<>'true' AND COALESCE(c.status,'active')<>'archived' ORDER BY v.id DESC`,[companyId]),
       readLiveSnapshots().catch(()=>({source:'unavailable',rows:[]}))
     ]);
-    const liveMap=new Map((live.rows||[]).map(row=>[String(row.id),row])),offlineMinutes=Math.max(1,Number(process.env.OFFLINE_MINUTES||10));
+    const liveMap=new Map((live.rows||[]).map(row=>[String(row.id),row])),offlineMinutes=boundedInteger(process.env.OFFLINE_MINUTES,10,1,525600);
     return rows.map(vehicle=>{
       const found=vehicle.traccar_device_id==null?null:liveMap.get(String(vehicle.traccar_device_id)),raw=parseAttrs(found?.attributes),lastUpdate=found?.lastupdate||null,lastMs=Date.parse(lastUpdate||''),online=Number.isFinite(lastMs)&&Date.now()-lastMs<=offlineMinutes*60000;
       const valid=found?.valid!==false,latitude=valid?found?.latitude:(found?.last_valid_latitude??found?.latitude),longitude=valid?found?.longitude:(found?.last_valid_longitude??found?.longitude),speed=found?.speed==null?null:Number((Number(found.speed)*1.852).toFixed(1)),ignition=typeof raw.ignition==='boolean'?raw.ignition:null,motion=typeof raw.motion==='boolean'?raw.motion:null;
@@ -193,6 +189,7 @@ app.get('/api/school/vehicles/stream',schoolAuth,requireSchoolAdmin,(req,res)=>{
 await pool.query('SELECT 1 FROM school_accounts LIMIT 1');
 await pool.query('SELECT 1 FROM school_portal_sessions LIMIT 1');
 await pool.query('SELECT 1 FROM mobile_push_tokens LIMIT 1');
+await pool.query('SELECT 1 FROM auth_login_attempt_windows LIMIT 0');
 app.post('/api/push/register',schoolAuth,async(req,res)=>{
   if(req.user.role!=='parent'||req.user.metadata?.schoolParent!==true)return res.status(403).json({error:'school_parent_required'});
   const token=String(req.body?.token||'');if(token.length<20||token.length>4096||/\s/.test(token))return res.status(400).json({error:'invalid_push_token'});

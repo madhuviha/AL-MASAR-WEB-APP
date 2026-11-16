@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   PlatformSettingsValidationError,
   mergePlatformSettings,
-  preparePlatformSettingsPatch
+  preparePlatformSettingsPatch,
+  redactPlatformSettings
 } from '../platform-settings.mjs';
 
 test('category patch changes only supplied keys and preserves other settings and top-level data',()=>{
@@ -29,6 +30,16 @@ test('blank secret fields are omitted so stored credentials survive the merge',(
     mapTilerKey:'stored-map-key',
     defaultBaseMap:'maptiler-basic'
   });
+});
+
+test('platform settings responses replace secret values with blank fields and configured flags',()=>{
+  const safe=redactPlatformSettings({mapboxToken:'must-not-return',captchaSecretKey:'also-hidden',portalTitle:'MASAR'});
+  assert.equal(safe.mapboxToken,'');
+  assert.equal(safe.captchaSecretKey,'');
+  assert.equal(safe.portalTitle,'MASAR');
+  assert.equal(safe.secretConfigured.mapboxToken,true);
+  assert.equal(safe.secretConfigured.captchaSecretKey,true);
+  assert.equal(safe.secretConfigured.googleMapsKey,false);
 });
 
 test('null explicitly clears a stored secret while blank text keeps it',()=>{
@@ -59,6 +70,11 @@ test('setting values enforce server-side types, ranges and image formats',()=>{
     ()=>preparePlatformSettingsPatch('branding',{brandLogoData:'data:text/html;base64,PGgxPk5vPC9oMT4='}),
     error=>error instanceof PlatformSettingsValidationError&&error.code==='invalid_settings_value'
   );
+  assert.throws(
+    ()=>preparePlatformSettingsPatch('branding',{loginBackgroundData:'data:image/svg+xml;base64,PHN2Zy8+'}),
+    error=>error instanceof PlatformSettingsValidationError&&error.code==='invalid_settings_value'
+  );
+  assert.equal(preparePlatformSettingsPatch('branding',{loginBackgroundData:'data:image/png;base64,aGVsbG8='}).loginBackgroundData,'data:image/png;base64,aGVsbG8=');
 });
 
 test('category validation rejects unknown keys and malformed bodies',()=>{

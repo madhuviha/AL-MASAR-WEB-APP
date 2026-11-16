@@ -708,3 +708,5 @@ main{margin-left:64px!important;transition:none!important}
   #root .app > main{padding-top:0!important;min-height:calc(100dvh - 60px);padding-bottom:72px!important}
   #root .app > main > .page{padding-top:10px!important}
 }
+
+.schoolModuleBadge{display:inline-flex;align-items:center;padding:4px 9px;border:1px solid #b9e8cc;border-radius:999px;background:#e9f8ef;color:#087a43;font-size:12px;font-weight:700;white-space:nowrap}

@@ -36,6 +36,16 @@ export const platformSecretSettingKeys=new Set([
   'streetviewApiKey','captchaSiteKey','captchaSecretKey'
 ]);
 
+export function redactPlatformSettings(settings={}){
+  const safe=settings&&typeof settings==='object'&&!Array.isArray(settings)?{...settings}:{};
+  const secretConfigured={};
+  for(const key of platformSecretSettingKeys){
+    secretConfigured[key]=Boolean(String(safe[key]??'').trim());
+    safe[key]='';
+  }
+  return {...safe,secretConfigured};
+}
+
 export class PlatformSettingsValidationError extends Error{
   constructor(code,message){super(message);this.name='PlatformSettingsValidationError';this.code=code}
 }
@@ -70,7 +80,8 @@ function validateSettingValue(key,value){
   if(Object.hasOwn(imageLimits,key)){
     if(typeof value!=='string')invalidValue(key,'must be an image value.');
     if(value.length>imageLimits[key])invalidValue(key,'image is too large.');
-    if(value&&!/^data:image\/(?:png|jpeg|webp|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=\s]+$/i.test(value))invalidValue(key,'must be a supported image data URL.');
+    const imagePattern=key==='loginBackgroundData'?/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=\s]+$/i:/^data:image\/(?:png|jpeg|webp|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=\s]+$/i;
+    if(value&&!imagePattern.test(value))invalidValue(key,key==='loginBackgroundData'?'must be PNG, JPEG or WebP.':'must be a supported image data URL.');
     return;
   }
   if(Object.hasOwn(numberRanges,key)){

@@ -20,8 +20,9 @@ const defaultUserMapAccess = () => Object.fromEntries(mapAccessOptions.map(([key
 const allUserMapAccess = () => Object.fromEntries(mapAccessOptions.map(([key]) => [key, true]));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
-const imageFileToDataUrl = (file, { maxDimension = 512, quality = 0.82 } = {}) => new Promise((resolve, reject) => {
+const imageFileToDataUrl = (file, { maxDimension = 512, quality = 0.82, rasterOnly = false } = {}) => new Promise((resolve, reject) => {
   if (!file) return reject(new Error("Choose an image file."));
+  if (rasterOnly && !["image/png", "image/jpeg", "image/webp"].includes(file.type)) return reject(new Error("Login backgrounds must be PNG, JPEG or WebP."));
   if (!String(file.type || "").startsWith("image/")) return reject(new Error("Choose a PNG, JPEG, WebP, SVG or icon image."));
   const reader = new FileReader();
   reader.onerror = () => reject(new Error("The selected image could not be read."));
@@ -69,7 +70,7 @@ function ImageSetting({ label, field, value, fallback, compact, inputRef, status
     {value ? <img src={value} alt="" /> : <span>{fallback}</span>}
     <button type="button" onClick={() => inputRef.current?.click()}><Upload />Choose {label.replace("Default ", "")}</button>
     <button type="button" onClick={() => onReset(field)} disabled={status?.status === "processing"}><Trash2 />{resetLabel}</button>
-    <input ref={inputRef} hidden type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon" onChange={(event) => onChoose(field, event.currentTarget, field === "loginBackgroundData" ? { maxDimension: 1920, quality: 0.84 } : undefined)} />
+    <input ref={inputRef} hidden type="file" accept={field === "loginBackgroundData" ? "image/png,image/jpeg,image/webp" : "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon"} onChange={(event) => onChoose(field, event.currentTarget, field === "loginBackgroundData" ? { maxDimension: 1920, quality: 0.84, rasterOnly: true } : undefined)} />
   </div>
     {status?.status === "processing" && <small className="brandingUploadStatus" role="status">Processing image…</small>}
     {status?.status === "error" && <small className="brandingUploadStatus brandingUploadError" role="alert">{status.message}</small>}
