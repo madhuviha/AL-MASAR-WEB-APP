@@ -434,12 +434,12 @@ app.post('/api/companies', requireAuth, requireSuper, async (req,res)=>{
   const client=await pool.connect();
   try {
     const name=cleanString(req.body.name), email=cleanString(req.body.email).toLowerCase();
-    const adminName=cleanString(req.body.adminName)||`${name} Admin`, password=String(req.body.password||'');
+    const adminName=cleanString(req.body.adminName)||`${name} Admin`, suppliedPassword=String(req.body.password||''), password=suppliedPassword||crypto.randomBytes(32).toString('base64url');
     let metadata;try{metadata=companyDates(cleanMetadata(req.body.metadata))}catch(e){return res.status(400).json({error:e.message})}
     const fieldIssue=validateCompanyFields({...metadata,name,email,temporaryPassword:password},{creating:true});if(fieldIssue)return res.status(400).json({error:fieldIssue.message});metadata.requiredFields=companyRequiredFields(metadata.requiredFields);
     if(!name) return res.status(400).json({error:'company_name_required'});
     if(!email) return res.status(400).json({error:'admin_email_required'});
-    if(password.length<8) return res.status(400).json({error:'password_minimum_8_characters'});
+    if(suppliedPassword&&password.length<8) return res.status(400).json({error:'password_minimum_8_characters'});
     await client.query('BEGIN');
     const exists=await client.query('SELECT id FROM companies WHERE lower(name)=lower($1)',[name]);
     if(exists.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'company_already_exists'});}
@@ -447,7 +447,7 @@ app.post('/api/companies', requireAuth, requireSuper, async (req,res)=>{
     if(emailExists.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'email_already_registered'});}
     const {rows}=await client.query(`INSERT INTO companies(name,email,status) VALUES($1,$2,$3) RETURNING id,name,email,status`,[name,email,req.body.status==='suspended'?'suspended':'active']);
     const company=rows[0];
-    const u=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status) VALUES($1,$2,$3,$4,'company_admin','active') RETURNING id,name,email,role,status`,[company.id,adminName,email,hashPassword(password)]);
+    const adminMapAccess=normalizeMapAccess(req.body.adminMapAccess||{});if(!mapAccessDefinitions.some(([key])=>adminMapAccess[key])){await client.query('ROLLBACK');return res.status(400).json({error:'at_least_one_base_map_required'});}const u=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status,metadata) VALUES($1,$2,$3,$4,'company_admin','active',$5::jsonb) RETURNING id,name,email,role,status`,[company.id,adminName,email,hashPassword(password),JSON.stringify({mapAccess:adminMapAccess})]);
     await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[u.rows[0].id,req.user.id]);
     await client.query(`INSERT INTO company_state(company_id,data,updated_by) VALUES($1,$2::jsonb,$3) ON CONFLICT(company_id) DO NOTHING`,[company.id,JSON.stringify({}),req.user.id]);
     await client.query(`INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'company_created','company',$3,$4::jsonb)`,[company.id,req.user.id,String(company.id),JSON.stringify({name,email})]);
