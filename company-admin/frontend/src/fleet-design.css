@@ -57,10 +57,12 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{
 .lockedMapPage .lockedMapPanel .mapList{overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:none!important;-ms-overflow-style:none!important}
 .lockedMapPage .lockedMapPanel .mapList::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
 
-.mapVehicleMenuPortal{position:fixed;z-index:6500;width:204px;padding:6px;background:#fff;border:1px solid #dce5e9;border-radius:10px;box-shadow:0 16px 38px #17354b38}
-.mapVehicleMenuPortal button{display:flex;align-items:center;justify-content:flex-start;gap:9px;width:100%;height:35px;margin:0;padding:7px 10px;border:0;border-radius:7px;background:#fff;color:#294b64;font-size:11px;text-align:left}
-.mapVehicleMenuPortal button:hover,.mapVehicleMenuPortal button:focus-visible{background:#eaf8f1;color:#087e4a;outline:0}
-.mapVehicleMenuPortal svg{width:15px;height:15px;flex:0 0 auto}
+.mapVehicleMenuPortal{position:fixed;z-index:10050;width:176px;padding:4px;background:#fff;border:1px solid #d8e1e7;border-radius:3px;box-shadow:0 5px 16px rgba(23,53,75,.2)}
+.mapVehicleMenuPortal:before{content:"";position:absolute;top:-5px;right:12px;width:8px;height:8px;transform:rotate(45deg);border-top:1px solid #d8e1e7;border-left:1px solid #d8e1e7;background:#fff}
+.mapVehicleMenuPortal.placement-top:before{top:auto;bottom:-5px;transform:rotate(225deg)}
+.mapVehicleMenuPortal button{position:relative;display:flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;height:31px;min-height:31px;margin:0;padding:6px 8px;border:0;border-radius:2px;background:#fff;color:#294b64;font-size:11px;text-align:left}
+.mapVehicleMenuPortal button:hover,.mapVehicleMenuPortal button:focus-visible{background:#f0f7f4;color:#087e4a;outline:0}
+.mapVehicleMenuPortal svg{width:13px;height:13px;flex:0 0 auto}
 
 .fleet-marker.moving .vehicle-map-icon{color:#08a85a!important;opacity:1!important}
 .fleet-marker.idle .vehicle-map-icon{color:#f59e0b!important;opacity:1!important}
