@@ -8,6 +8,7 @@ const MENU_WIDTH=176;
 export default function RowActionMenu({label='Row actions',items=[],trigger='gear',className=''}){
   const id=useId();
   const [open,setOpen]=useState(false);
+  const [confirming,setConfirming]=useState(null);
   const [position,setPosition]=useState({left:8,top:8});
   const triggerRef=useRef(null);
   const menuRef=useRef(null);
@@ -57,6 +58,15 @@ export default function RowActionMenu({label='Row actions',items=[],trigger='gea
     };
   },[open]);
 
+  useEffect(()=>{
+    if(!confirming)return;
+    const onKeyDown=event=>{
+      if(event.key==='Escape')setConfirming(null);
+    };
+    document.addEventListener('keydown',onKeyDown,true);
+    return()=>document.removeEventListener('keydown',onKeyDown,true);
+  },[confirming]);
+
   const toggle=event=>{
     event.stopPropagation();
     if(open){setOpen(false);return}
@@ -69,6 +79,16 @@ export default function RowActionMenu({label='Row actions',items=[],trigger='gea
     setOpen(true);
   };
 
+  const chooseItem=item=>{
+    setOpen(false);
+    if(item.tone==='danger'&&item.confirmation!==false){setConfirming(item);return}
+    item.onSelect?.();
+  };
+
+  const subject=label.replace(/^Actions for\s*/i,'').trim()||'this item';
+  const confirmation=confirming?.confirmation&&typeof confirming.confirmation==='object'?confirming.confirmation:{};
+  const isDeactivate=/deactivat/i.test(confirming?.label||'');
+
   return <>
     <button ref={triggerRef} type="button" className={`rowActionTrigger ${className}`} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
       <Icon aria-hidden="true"/>
@@ -76,10 +96,22 @@ export default function RowActionMenu({label='Row actions',items=[],trigger='gea
     {open&&createPortal(<div ref={menuRef} className="rowActionPopover" style={{left:position.left,top:position.top}} role="menu" aria-label={label} onClick={event=>event.stopPropagation()}>
       {items.map((item,index)=>{
         const ItemIcon=item.icon;
-        return <button key={`${item.label}-${index}`} type="button" role="menuitem" className={item.tone==='danger'?'danger':''} disabled={item.disabled} onClick={()=>{setOpen(false);item.onSelect?.()}}>
+        return <button key={`${item.label}-${index}`} type="button" role="menuitem" className={item.tone==='danger'?'danger':''} disabled={item.disabled} onClick={()=>chooseItem(item)}>
           {ItemIcon&&<ItemIcon aria-hidden="true"/>}<span>{item.label}</span>
         </button>;
       })}
+    </div>,document.body)}
+    {confirming&&createPortal(<div className="deleteConfirmOverlay" onMouseDown={event=>event.target===event.currentTarget&&setConfirming(null)}>
+      <div className="deleteConfirmDialog" role="alertdialog" aria-modal="true" aria-labelledby={`rowConfirmTitle-${id}`} aria-describedby={`rowConfirmBody-${id}`}>
+        <div className="deleteConfirmMessage">
+          <p id={`rowConfirmTitle-${id}`}>{confirmation.message||`Do you really want to ${String(confirming.label||'continue').toLowerCase()} ${subject}?`}</p>
+          <p id={`rowConfirmBody-${id}`}>{confirmation.description||(isDeactivate?'This account will be disabled. You can enable it again later.':'This item will be removed from the company account.')}</p>
+        </div>
+        <div className="deleteConfirmActions">
+          <button type="button" className="confirmDeleteAction" onClick={()=>{const action=confirming.onSelect;setConfirming(null);action?.()}}>{confirmation.actionLabel||confirming.label||'Confirm'}</button>
+          <button type="button" onClick={()=>setConfirming(null)}>Cancel</button>
+        </div>
+      </div>
     </div>,document.body)}
   </>;
 }

@@ -11,3 +11,15 @@
 .rowActionPopover button svg{width:13px;height:13px;flex:0 0 13px;stroke-width:1.8}
 .rowActionPopover button.danger{color:#bd3030}
 .rowActionPopover button.danger:hover:not(:disabled){background:#fff1f1;color:#a92323}
+
+/* Shared top-centered confirmation for destructive row actions. */
+.deleteConfirmOverlay{position:fixed;inset:0;z-index:10100;display:grid;place-items:start center;padding:max(32px,12vh) 20px 20px;background:rgba(0,0,0,.48)}
+.deleteConfirmDialog{width:min(560px,calc(100vw - 32px));background:#fff;color:#222;border:1px solid #d0d0d0;border-radius:2px;box-shadow:0 8px 24px rgba(0,0,0,.28);font-family:Arial,sans-serif}
+.deleteConfirmMessage{padding:16px 14px 14px;min-height:60px;font-size:13px;line-height:1.45}
+.deleteConfirmMessage p{margin:0}
+.deleteConfirmMessage p+p{margin-top:2px}
+.deleteConfirmActions{display:flex;align-items:center;gap:8px;padding:12px 14px;background:#fafafa;border-top:1px solid #e8e8e8}
+.deleteConfirmActions button{min-width:62px;min-height:30px;padding:5px 12px;border:1px solid #dedede;border-radius:2px;background:#f1f1f1;color:#222;font:12px Arial,sans-serif;cursor:pointer}
+.deleteConfirmActions button:hover,.deleteConfirmActions button:focus-visible{background:#e7e7e7;outline:2px solid #b8c7d4;outline-offset:1px}
+.deleteConfirmActions .confirmDeleteAction{border-color:#c62828;background:#c62828;color:#fff;font-weight:600}
+.deleteConfirmActions .confirmDeleteAction:hover,.deleteConfirmActions .confirmDeleteAction:focus-visible{border-color:#a91f1f;background:#a91f1f;color:#fff}

@@ -505,7 +505,9 @@ body,button,input,select,textarea,.leaflet-popup-content{font-family:Arial,Helve
 @media(max-width:700px){.legacyUserForm{grid-template-columns:1fr}.legacyUserForm .span2{grid-column:auto}.legacyMaps{grid-template-columns:1fr 1fr}}
 
 /* Reference-style Add User form. Keep the modal compact, aligned, and tabbed. */
-.referenceUserModal{width:min(600px,calc(100vw - 24px));max-height:92vh;overflow:hidden;border-radius:4px}
+.referenceUserModal{width:min(600px,calc(100vw - 24px));height:min(820px,calc(100vh - 32px));max-height:92vh;overflow:hidden;border-radius:4px;display:flex;flex-direction:column}
+.referenceUserModal>.referenceUserTabs{flex:0 0 auto}
+.referenceUserModal>.referenceUserMain,.referenceUserModal>.referenceTabPanel{flex:1 1 auto;min-height:0;max-height:none;overflow:auto}
 .referenceUserModal .modalHead{padding:16px 16px 14px;border-bottom:1px solid #e5e8eb}
 .referenceUserModal .modalHead h2{font-size:17px;font-weight:500;color:#253746}
 .referenceUserModal .modalHead button{border:0;background:transparent;color:#c7cdd1}
@@ -514,7 +516,7 @@ body,button,input,select,textarea,.leaflet-popup-content{font-family:Arial,Helve
 .referenceUserTabs button{border:0;border-bottom:2px solid transparent;background:#fff;color:#76838d;padding:12px 15px;font-size:12px;white-space:nowrap;cursor:pointer}
 .referenceUserTabs button:hover{background:#f7f9fa;color:#315267}
 .referenceUserTabs button.activeTab{color:#15945a;border-bottom-color:#15945a;background:#f4fbf7;font-weight:600}
-.referenceUserMain{padding:14px 16px 18px;gap:10px 18px;max-height:calc(92vh - 190px);overflow:auto}
+.referenceUserMain{padding:14px 16px 18px;gap:10px 18px;max-height:none;overflow:auto}
 .referenceUserModal .legacyUserForm>label,.referenceUserModal .legacyUserForm fieldset{font-size:11px;color:#2f3e47;gap:5px}
 .referenceUserModal .legacyUserForm input,.referenceUserModal .legacyUserForm select{height:32px;border-radius:2px;border-color:#e2e5e7;background:#fafafa;font-size:12px;padding:0 8px}
 .referenceUserModal .legacyUserForm input:focus,.referenceUserModal .legacyUserForm select:focus{outline:0;border-color:#2bb36d;box-shadow:0 0 0 2px rgba(43,179,109,.12);background:#fff}
@@ -529,7 +531,7 @@ body,button,input,select,textarea,.leaflet-popup-content{font-family:Arial,Helve
 .referenceUserModal .modalFoot{padding:12px 16px;background:#fafafa}
 .referenceUserModal .modalFoot button{border-radius:3px;padding:8px 14px;font-size:12px}
 .referenceUserModal .modalFoot .greenBtn{background:#2bb36d!important;border-color:#2bb36d!important}
-.referenceTabPanel{padding:18px 20px 22px;min-height:330px;max-height:calc(92vh - 190px);overflow:auto;color:#425662}
+.referenceTabPanel{padding:18px 20px 22px;min-height:0;max-height:none;overflow:auto;color:#425662}
 .referenceTabPanel h3{margin:0 0 5px;font-size:15px;color:#253f51;font-weight:600}
 .referenceTabPanel>p{margin:0 0 16px;font-size:12px;color:#7b8b95}
 .referencePermissionGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -563,7 +565,7 @@ body,button,input,select,textarea,.leaflet-popup-content{font-family:Arial,Helve
 .tableAddButton{display:inline-flex!important;align-items:center;gap:4px!important;width:auto!important;padding:4px 8px!important;border:1px solid #bfe0ce!important;border-radius:5px!important;background:#eff9f3!important;color:#087844!important;font-weight:700}
 .tableAddButton svg{width:13px;height:13px}
 .subAccountRow{display:grid;grid-template-columns:70px minmax(150px,1.5fr) minmax(90px,.7fr) 90px auto;gap:10px;align-items:center;padding:9px 11px;border-top:1px solid #edf1f3;font-size:11px}
-.subAccountRow>span:nth-child(2){display:flex;flex-direction:column;gap:2px;min-width:0}.subAccountRow small{color:#738692;overflow:hidden;text-overflow:ellipsis}.subAccountActions{display:flex;gap:6px}.subAccountActions button{display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border:1px solid #d9e3e8;border-radius:5px;background:#fff;color:#31586f;font-size:10px}.subAccountActions svg{width:12px;height:12px}
+.singleAccountExpansion>.subusersSection{overflow:visible}.singleAccountExpansion>.subusersSection>.legacyVehicleHead{border-radius:7px 7px 0 0}.subAccountEntry{border-top:1px solid #edf1f3}.subAccountEntry>.subAccountRow{border-top:0}.subAccountRow>span:nth-child(2){display:flex;flex-direction:column;gap:2px;min-width:0}.subAccountRow small{color:#738692;overflow:hidden;text-overflow:ellipsis}.subAccountActions{display:flex;gap:6px;position:relative}.subAccountActions button{display:inline-flex;align-items:center;gap:4px;padding:5px 7px;border:1px solid #d9e3e8;border-radius:5px;background:#fff;color:#31586f;font-size:10px}.subAccountActions svg{width:12px;height:12px}.subAccountActions>.iconBtn svg{width:16px;height:16px}.subuserActionMenu{display:flex;justify-content:flex-end;gap:8px;padding:0 11px 10px}.subuserActionMenu button{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #d9e3e8;border-radius:6px;background:#fff;color:#31586f;font-size:11px;cursor:pointer}.subuserActionMenu button:hover{background:#f3f7fb}.subuserActionMenu button.red{border-color:#f0d1d1;background:#fff7f7;color:#c62828}.subuserActionMenu svg{width:14px;height:14px}
 .nestedEmpty{min-height:74px;display:grid;place-items:center;margin:0;background:#fff;color:#82929c}
 @media(max-width:1100px){.accountExpansion{grid-template-columns:1fr}.usersDirectoryPanel{min-height:calc(100vh - 235px)}}.singleAccountExpansion{padding:12px 18px 16px 28px;background:#fbfcfd}.singleAccountExpansion>section{border:1px solid #dfe7eb;border-radius:8px;overflow:hidden;background:#fff}.singleAccountExpansion .legacyVehicleHead{grid-template-columns:1fr auto auto;margin:0;padding:9px 11px;background:#f4f8f6}.countButton{min-width:30px;padding:4px 9px!important;border:1px solid transparent!important;border-radius:6px!important;text-decoration:none!important;font-weight:800}.countButton:hover,.countButton.countActive{border-color:#9bd1b4!important;background:#e9f8f0!important;color:#057542!important}.singleAccountExpansion .legacyVehicleRow{grid-template-columns:1.2fr 1.4fr .8fr .8fr 34px}
 /* Full-height company-admin directory with fixed pagination footer */
@@ -708,5 +710,69 @@ main{margin-left:64px!important;transition:none!important}
   #root .app > main{padding-top:0!important;min-height:calc(100dvh - 60px);padding-bottom:72px!important}
   #root .app > main > .page{padding-top:10px!important}
 }
+
+/* Compact Effy-style Users directory: let short lists shrink and scroll only when needed. */
+.usersDirectoryPage{height:auto;min-height:calc(100vh - 72px);overflow:visible}
+.usersDirectoryPage>.titleRow{flex:0 0 auto;margin-bottom:12px}
+.usersDirectoryPanel{flex:0 1 auto;min-height:0!important;height:auto;overflow:visible;padding-bottom:0}
+.usersDirectoryPanel>.usersTableWrap{flex:0 1 auto;min-height:0;max-height:calc(100vh - 330px);overflow:auto;scrollbar-width:thin;scrollbar-color:#73808a #edf1f3}
+.usersDirectoryPanel .mainUsersTable{width:100%;min-width:1200px;table-layout:auto}
+.usersDirectoryPanel .mainUsersTable th,.usersDirectoryPanel .mainUsersTable td{padding:8px 9px;font-size:11px}
+.usersDirectoryPanel .mainUsersTable th{position:sticky;top:0;z-index:3}
+.usersDirectoryPanel .usersPagination{flex:0 0 48px}
+@media(max-width:760px){.usersDirectoryPage{height:auto;min-height:calc(100vh - 60px)}.usersDirectoryPanel>.usersTableWrap{max-height:calc(100vh - 290px)}.usersDirectoryPanel .usersPagination{height:auto;flex-basis:auto}}
+
+/* Nudge the Users footer controls slightly lower. */
+.usersDirectoryPanel .usersPagination>span,.usersDirectoryPanel .usersPagination>div{transform:translateY(8px)}
+
+/* Vehicle list dropdown control in each company row. */
+.usersDirectoryPanel .companyRowActions{width:100%;display:flex;align-items:center;justify-content:flex-end;gap:5px}
+.usersDirectoryPanel .vehicleExpandButton{color:#236548;background:#f4fbf7;border-color:#cfe5d8}
+.usersDirectoryPanel .vehicleExpandButton svg{transition:transform .16s ease}
+.usersDirectoryPanel .vehicleExpandButton.expanded svg{transform:rotate(180deg)}
+.usersDirectoryPanel .vehicleExpandButton:focus-visible{outline:2px solid #17a765;outline-offset:2px}
+
+/* Keep the Add Vehicle dialog frame fixed while tab content changes. */
+.overlay:has(>.arrangedVehicleModal){padding:16px}
+.overlay>.arrangedVehicleModal{display:flex!important;flex-direction:column!important;box-sizing:border-box!important;width:min(920px,calc(100vw - 32px))!important;height:min(790px,calc(100dvh - 32px))!important;max-width:calc(100vw - 32px)!important;max-height:calc(100dvh - 32px)!important;min-height:0!important;overflow:hidden!important;transition:none!important}
+.overlay>.arrangedVehicleModal>.modalHead{position:relative!important;top:auto!important;flex:0 0 auto!important}
+.overlay>.arrangedVehicleModal>.vehicleTabs{display:flex!important;flex:0 0 58px!important;height:58px!important;min-height:58px!important;max-height:58px!important;overflow-x:auto!important;overflow-y:hidden!important;box-sizing:border-box!important}
+.overlay>.arrangedVehicleModal>.vehicleModalBody{display:block!important;flex:1 1 auto!important;min-height:0!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain}
+.overlay>.arrangedVehicleModal>.vehicleModalBody .formGrid,.overlay>.arrangedVehicleModal>.vehicleModalBody .iconPicker,.overlay>.arrangedVehicleModal>.vehicleModalBody .sensorGrid,.overlay>.arrangedVehicleModal>.vehicleModalBody .repeatSection{overflow:visible!important;max-height:none!important}
+.overlay>.arrangedVehicleModal>.modalFoot{position:relative!important;bottom:auto!important;flex:0 0 auto!important;margin-top:0!important}
+@media(max-width:620px){.overlay:has(>.arrangedVehicleModal){padding:8px}.overlay>.arrangedVehicleModal{width:calc(100vw - 16px)!important;height:calc(100dvh - 16px)!important;max-width:calc(100vw - 16px)!important;max-height:calc(100dvh - 16px)!important}.overlay>.arrangedVehicleModal>.vehicleTabs{flex-basis:58px!important;height:58px!important;min-height:58px!important;max-height:58px!important}}
+
+/* Anchored company-row action dropdown opened by the chevron. */
+.companyActionDropdown{position:fixed;z-index:140;width:164px;padding:5px;background:#fff;border:1px solid #d9e2e9;border-radius:8px;box-shadow:0 8px 20px rgba(26,47,64,.14)}
+.companyActionDropdown:before{content:"";position:absolute;left:calc(var(--menu-pointer-x) - 5px);width:9px;height:9px;background:#fff}
+.companyActionDropdown[data-placement="below"]:before{top:-6px;border-top:1px solid #d9e2e9;border-left:1px solid #d9e2e9;transform:rotate(45deg)}
+.companyActionDropdown[data-placement="above"]:before{bottom:-6px;border-right:1px solid #d9e2e9;border-bottom:1px solid #d9e2e9;transform:rotate(45deg)}
+.companyActionDropdown button{position:relative;z-index:1;width:100%;min-height:36px;display:flex;align-items:center;gap:9px;padding:7px 9px;border:0;border-radius:5px;background:#fff;color:#23445c;text-align:left;font:inherit;font-size:12px;cursor:pointer}
+.companyActionDropdown button:hover,.companyActionDropdown button:focus-visible{background:#eff8f3;color:#087a49;outline:none}
+.companyActionDropdown button svg{width:15px;height:15px}
+
+.companyActionDropdown button.red{color:#c62828}.companyActionDropdown button.red:hover{background:#fff2f2;color:#b71c1c}
+
+/* Compact in-app delete confirmation for user and vehicle actions */
+.deleteConfirmOverlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:start center;padding:max(32px,12vh) 20px 20px;background:rgba(0,0,0,.48)}
+.deleteConfirmDialog{width:min(560px,calc(100vw - 32px));background:#fff;color:#222;border:1px solid #d0d0d0;border-radius:2px;box-shadow:0 8px 24px rgba(0,0,0,.28);font-family:Arial,sans-serif}
+.deleteConfirmMessage{padding:16px 14px 14px;min-height:60px;font-size:13px;line-height:1.45}
+.deleteConfirmMessage p{margin:0}
+.deleteConfirmMessage p+p{margin-top:2px}
+.deleteConfirmActions{display:flex;align-items:center;gap:8px;padding:12px 14px;background:#fafafa;border-top:1px solid #e8e8e8}
+.deleteConfirmActions button{min-width:62px;min-height:30px;padding:5px 12px;border:1px solid #dedede;border-radius:2px;background:#f1f1f1;color:#222;font:12px Arial,sans-serif;cursor:pointer}
+.deleteConfirmActions button:hover,.deleteConfirmActions button:focus-visible{background:#e7e7e7;outline:2px solid #b8c7d4;outline-offset:1px}
+.deleteConfirmActions .confirmDeleteAction{border-color:#c62828;background:#c62828;color:#fff;font-weight:600}
+.deleteConfirmActions .confirmDeleteAction:hover,.deleteConfirmActions .confirmDeleteAction:focus-visible{border-color:#a91f1f;background:#a91f1f;color:#fff}
+.deleteConfirmActions .confirmLoginAction{border-color:#12945d;background:#12945d;color:#fff;font-weight:600}
+.deleteConfirmActions .confirmLoginAction:hover,.deleteConfirmActions .confirmLoginAction:focus-visible{border-color:#087a49;background:#087a49;color:#fff}
+
+/* Dashboard charts reveal on load and smoothly follow live count changes. */
+.miniBars i{transform-origin:left center;animation:dashboardBarGrow .8s cubic-bezier(.2,.75,.25,1) both;transition:width .7s cubic-bezier(.2,.75,.25,1)}
+.miniBars>div:nth-child(2) i{animation-delay:70ms}.miniBars>div:nth-child(3) i{animation-delay:140ms}.miniBars>div:nth-child(4) i{animation-delay:210ms}.miniBars>div:nth-child(5) i{animation-delay:280ms}.miniBars>div:nth-child(6) i{animation-delay:350ms}
+.fleetStatusRing{animation:dashboardPieReveal .85s cubic-bezier(.2,.75,.25,1) both}
+@keyframes dashboardBarGrow{from{transform:scaleX(0);opacity:.45}to{transform:scaleX(1);opacity:1}}
+@keyframes dashboardPieReveal{from{clip-path:circle(0 at 50% 50%);transform:scale(.82);opacity:.35}to{clip-path:circle(72% at 50% 50%);transform:scale(1);opacity:1}}
+@media(prefers-reduced-motion:reduce){.miniBars i,.fleetStatusRing{animation:none!important;transition:none!important}}
 
 .schoolModuleBadge{display:inline-flex;align-items:center;padding:4px 9px;border:1px solid #b9e8cc;border-radius:999px;background:#e9f8ef;color:#087a43;font-size:12px;font-weight:700;white-space:nowrap}

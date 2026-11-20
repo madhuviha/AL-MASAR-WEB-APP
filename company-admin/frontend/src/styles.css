@@ -478,3 +478,8 @@
 /* Center dashboard status content without changing the original card dimensions */
 .kpi.statusKpi{justify-content:center;text-align:center}
 .kpi.statusKpi>div{display:flex;flex-direction:column;align-items:center;text-align:center}
+
+/* Vehicle-status pie reveal; its key changes only when the displayed counts change. */
+.statusDonut{animation:dashboardPieReveal .85s cubic-bezier(.2,.75,.25,1) both}
+@keyframes dashboardPieReveal{from{clip-path:circle(0 at 50% 50%);transform:scale(.82);opacity:.35}to{clip-path:circle(72% at 50% 50%);transform:scale(1);opacity:1}}
+@media(prefers-reduced-motion:reduce){.statusDonut{animation:none!important}}

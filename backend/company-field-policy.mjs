@@ -4,6 +4,6 @@ export function validateCompanyFields(data,{creating=false}={}){
  let keys;try{keys=companyRequiredFields(data.requiredFields)}catch(e){return {message:e.message,tab:'mandatory',key:'requiredFields'}}
  for(const key of keys){const v=data[key],present=v&&typeof v==='object'?Object.values(v).some(x=>x===true):v!==null&&v!==undefined&&String(v).trim()!=='';if(!present){const field=companyFieldOptions.find(([k])=>k===key);return {message:field[1]+' is required.',tab:field[2],key};}}
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.email||'')))return {message:'Enter a valid administrator email.',tab:'main',key:'email'};
- if(creating&&data.temporaryPassword&&String(data.temporaryPassword).length<8)return {message:'Temporary password must be at least 8 characters.',tab:'access',key:'temporaryPassword'};
+ if(creating&&data.temporaryPassword&&String(data.temporaryPassword).length<4)return {message:'Temporary password must be at least 4 characters.',tab:'access',key:'temporaryPassword'};
  return null;
 }

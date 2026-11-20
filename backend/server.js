@@ -439,7 +439,7 @@ app.post('/api/companies', requireAuth, requireSuper, async (req,res)=>{
     const fieldIssue=validateCompanyFields({...metadata,name,email,temporaryPassword:password},{creating:true});if(fieldIssue)return res.status(400).json({error:fieldIssue.message});metadata.requiredFields=companyRequiredFields(metadata.requiredFields);
     if(!name) return res.status(400).json({error:'company_name_required'});
     if(!email) return res.status(400).json({error:'admin_email_required'});
-    if(suppliedPassword&&password.length<8) return res.status(400).json({error:'password_minimum_8_characters'});
+    if(suppliedPassword&&password.length<4) return res.status(400).json({error:'password_minimum_4_characters'});
     await client.query('BEGIN');
     const exists=await client.query('SELECT id FROM companies WHERE lower(name)=lower($1)',[name]);
     if(exists.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'company_already_exists'});}
@@ -467,12 +467,12 @@ app.put('/api/companies/:id', requireAuth, requireSuper, async (req,res)=>{
     if(!rows[0]){await client.query('ROLLBACK');return res.status(404).json({error:'company_not_found'});}
     const au=await client.query(`SELECT id FROM auth_users WHERE company_id=$1 AND role='company_admin' ORDER BY id LIMIT 1`,[id]);
     if(au.rowCount){
-      if(password && password.length<8){await client.query('ROLLBACK');return res.status(400).json({error:'password_minimum_8_characters'});}
+      if(password && password.length<4){await client.query('ROLLBACK');return res.status(400).json({error:'password_minimum_4_characters'});}
       if(password)await client.query('DELETE FROM auth_sessions WHERE user_id=$1',[au.rows[0].id]);
       if(password) await client.query(`UPDATE auth_users SET name=$1,email=$2,password_hash=$3,status=$4,updated_at=NOW() WHERE id=$5`,[adminName,email,hashPassword(password),String(req.body.status||'active').toLowerCase()==='active'?'active':'disabled',au.rows[0].id]);
       else await client.query(`UPDATE auth_users SET name=$1,email=$2,status=$3,updated_at=NOW() WHERE id=$4`,[adminName,email,String(req.body.status||'active').toLowerCase()==='active'?'active':'disabled',au.rows[0].id]);
     } else {
-      if(password.length<8){await client.query('ROLLBACK');return res.status(400).json({error:'password_required_for_company_admin'});}
+      if(password.length<4){await client.query('ROLLBACK');return res.status(400).json({error:'password_required_for_company_admin'});}
       const created=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status) VALUES($1,$2,$3,$4,'company_admin','active') RETURNING id`,[id,adminName,email,hashPassword(password)]);
       await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[created.rows[0].id,req.user.id]);
     }
