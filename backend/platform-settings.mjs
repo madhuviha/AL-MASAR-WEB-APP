@@ -3,7 +3,7 @@ export const platformSettingsCategories=Object.freeze({
     'portalTitle','browserTitle','companyBrowserTitle','brandLogoData','collapsedLogoData',
     'loginLogoData','loginBackgroundData','templateColor','loginTextColor',
     'loginBackgroundColor','loginPanelColor','welcomeText','bottomText',
-    'loginPanelTransparency','googlePlayUrl','appStoreUrl','faviconData'
+    'loginPanelTransparency','googlePlayUrl','appStoreUrl','whatsappNumber','faviconData'
   ]),
   loginContacts:Object.freeze(['supportEmail','supportPhone','whatsappNumber']),
   tracking:Object.freeze([
@@ -11,7 +11,7 @@ export const platformSettingsCategories=Object.freeze({
     'untrackedMinutes','trackingPolicyEnabled','offlineMinutes'
   ]),
   general:Object.freeze([
-    'timezone','dateFormat','timeFormat','durationFormat',
+    'supportEmail','supportPhone','timezone','dateFormat','timeFormat','durationFormat',
     'distanceUnit','capacityUnit','altitudeUnit','distanceDecimals','language'
   ]),
   maps:Object.freeze([

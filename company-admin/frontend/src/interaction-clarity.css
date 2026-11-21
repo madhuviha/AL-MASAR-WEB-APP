@@ -67,10 +67,17 @@
 }
 
 @media(min-width:1500px){
-  .dashGrid{grid-template-columns:minmax(520px,.95fr) minmax(600px,1.05fr)!important}
-  .dashGrid>.statusCard{padding:14px!important}
-  .dashGrid>.statusCard .donutWrap{gap:18px;padding:24px 8px 16px}
-  .dashGrid>.statusCard .legend{min-width:260px}
+  .dashGrid{grid-template-columns:minmax(390px,.78fr) minmax(700px,1.4fr)!important;align-items:start!important}
+  .dashGrid>.statusCard{padding:12px!important;align-self:start!important}
+  .dashGrid>.statusCard .donutWrap{grid-template-columns:minmax(170px,190px) minmax(0,1fr)!important;gap:12px;padding:14px 8px 8px!important}
+  .dashGrid>.statusCard .statusDonut{width:180px!important;height:180px!important}
+  .dashGrid>.statusCard .statusDonutCenter{inset:25px!important}
+  .dashGrid>.statusCard .statusDonutCenter strong{font-size:28px!important}
+  .dashGrid>.statusCard .legend{min-width:0!important}
+  .dashGrid>.statusCard .legend>div{min-height:52px!important;padding:7px 0!important;gap:8px!important}
+  .dashGrid>.statusCard .legend>div>span small{font-size:10px!important}
+  .dashGrid>.statusCard .legend>div>strong{font-size:15px!important}
+  .dashboardMapCanvas{height:clamp(520px,72vh,760px)!important}
 }
 
 /* One slow-pulsing status dot replaces the engine glyph in each map card. */
