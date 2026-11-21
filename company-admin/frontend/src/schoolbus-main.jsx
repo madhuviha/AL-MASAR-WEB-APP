@@ -6,6 +6,7 @@ import './fleet-design.css';
 import './modern-login.css';
 import './company-sidebar-final.css';
 import './school-buses.css';
+import './login-page-final.css';
 
 class SchoolPortalErrorBoundary extends React.Component {
   state = { failed: false };

@@ -124,3 +124,43 @@ html body #root .loginCompactCard .loginCaptcha{margin:0 0 14px!important}
 @media(prefers-reduced-motion:reduce){
   html body #root .loginCompactCard,html body #root .loginCompactCard>*{animation:none!important;transition:none!important}
 }
+
+/* School Bus login keeps the Company Admin card and form, with school-only branding. */
+html body #root .secureLogin.productionLogin.schoolBusLoginPage{
+  background-color:#18334b!important;
+  background-image:linear-gradient(115deg,rgba(8,35,58,.44),rgba(8,35,58,.12) 54%,rgba(8,35,58,.28)),url('./assets/ui/school-bus-schoolchildren-bg.jpg')!important;
+  background-position:24% center!important;
+  background-repeat:no-repeat!important;
+  background-size:cover!important;
+}
+html body #root .secureLogin.productionLogin.schoolBusLoginPage>.loginCompactCard{
+  border-color:#dde3ec!important;
+  background:#fff!important;
+  color:#0b2a5b!important;
+  box-shadow:0 8px 24px rgba(11,42,91,.18)!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+html body #root .secureLogin.productionLogin.schoolBusLoginPage .loginCompactCard .loginSubmit{
+  border-color:#f0b92e!important;
+  background:#f5c542!important;
+  color:#0b2a5b!important;
+  box-shadow:0 4px 12px rgba(142,101,10,.18)!important;
+}
+html body #root .secureLogin.productionLogin.schoolBusLoginPage .loginCompactCard .loginSubmit:not(:disabled):hover{
+  border-color:#e2ae27!important;
+  background:#eab936!important;
+  color:#0b2a5b!important;
+  box-shadow:0 7px 16px rgba(142,101,10,.24)!important;
+}
+html body #root .secureLogin.productionLogin.schoolBusLoginPage .loginCompactCard .loginSubmit:focus-visible{
+  outline:3px solid #0b2a5b!important;
+  outline-offset:3px!important;
+}
+html body #root .secureLogin.productionLogin.schoolBusLoginPage .loginCompactCard .loginSubmit:disabled::after{
+  border-color:rgba(11,42,91,.35)!important;
+  border-top-color:#0b2a5b!important;
+}
+@media(max-width:560px){
+  html body #root .secureLogin.productionLogin.schoolBusLoginPage{background-position:10% center!important}
+}
