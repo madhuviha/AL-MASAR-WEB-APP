@@ -112,7 +112,7 @@ app.get('/api/school/admin/accounts',fleetSuper,async(_req,res)=>{
 });
 app.post('/api/school/admin/accounts',fleetSuper,async(req,res)=>{
   const companyId=Number(req.body?.companyId),schoolName=clean(req.body?.schoolName),adminName=clean(req.body?.adminName),email=clean(req.body?.email).toLowerCase(),password=String(req.body?.password||'');
-  if(!Number.isSafeInteger(companyId)||companyId<1||!schoolName||!adminName||!email.includes('@')||password.length<12)return res.status(400).json({error:'school_company_admin_name_email_and_12_character_password_required'});
+  if(!Number.isSafeInteger(companyId)||companyId<1||!schoolName||!adminName||!email.includes('@')||password.length<4)return res.status(400).json({error:'school_company_admin_name_email_and_4_character_password_required'});
   const client=await pool.connect();
   try{
     await client.query('BEGIN');

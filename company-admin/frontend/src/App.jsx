@@ -3,7 +3,7 @@ import RagReport from './RagReport.jsx';
 import FleetReport from './FleetReport.jsx';
 import LanguagePreferences,{useLanguageSetting,useText} from './LanguagePreferences.jsx';
 import {readClientPage,pushClientPage} from './client-routing.mjs';
-import {FormSection,VehicleAppearance,LoginVisual,LoginAppLinks,LoginSupportLinks,LoginBadge,LoginBrandText,LoginCaptcha,readLoginCaptchaToken,VehicleSymbol} from './FleetAppearance.jsx';
+import {FormSection,VehicleAppearance,LoginVisual,LoginAppLinks,LoginSupportLinks,LoginRecoveryLink,LoginBadge,LoginCaptcha,readLoginCaptchaToken,VehicleSymbol} from './FleetAppearance.jsx';
 import {DeviceModelFields,SensorsIoPanel} from './DeviceProfiles.jsx';
 import {profileRequest} from './api.js';
 import {DriverIdentifiers,CurrentDriver,DriverIdentificationSettings,useDriverUpdates} from './DriverIdentification.jsx';
@@ -49,9 +49,9 @@ import {PrivacyPolicyPage,DataDeletionPage} from './PrivacyPolicy.jsx';
 import CompanySettingsPage from './CompanySettingsPage.jsx';
 import {buildCompanyExport} from './company-data-export.mjs';
 import {withCompanySettingsSnapshot} from './company-settings-snapshot.mjs';
-import React,{useEffect,useMemo,useRef,useState}from'react';
+import React,{useEffect,useLayoutEffect,useMemo,useRef,useState}from'react';
 import{createPortal}from'react-dom';
-import{MapContainer,TileLayer,Marker,Popup,Polyline,Circle,Polygon,useMap,useMapEvents}from'react-leaflet';
+import{MapContainer,TileLayer,Marker,Popup,Polyline,Circle,Polygon,ZoomControl,useMap,useMapEvents}from'react-leaflet';
 import L from'leaflet';
 import{
   Activity,AlertTriangle,BatteryCharging,Bell,BusFront,CalendarDays,Car,Check,CheckCircle2,ChevronDown,ChevronLeft,ChevronRight,Cog,
@@ -66,6 +66,11 @@ import SchoolBusesPage from './SchoolBusesPage.jsx';
 import SchoolBusMapPage from './SchoolBusMapPage.jsx';
 
 const DAY=86400000;
+const mapHasPosition=vehicle=>{
+ const latitude=vehicle?.position?.latitude,longitude=vehicle?.position?.longitude;
+ const lat=Number(latitude),lng=Number(longitude);
+ return latitude!==null&&latitude!==undefined&&latitude!==''&&longitude!==null&&longitude!==undefined&&longitude!==''&&Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180;
+};
 const platformDateLocale=format=>format==='MM-DD-YYYY'?'en-US':format==='YYYY-MM-DD'?'en-CA':'en-GB';
 const fmtDate=v=>{if(!v)return'—';const setting=readGlobalBranding();return new Date(v).toLocaleDateString(platformDateLocale(setting.dateFormat),{timeZone:setting.timezone||'Asia/Qatar'})};
 const fmtDateTime=v=>{if(!v)return'—';const setting=readGlobalBranding();return new Date(v).toLocaleString(platformDateLocale(setting.dateFormat),{timeZone:setting.timezone||'Asia/Qatar',year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:setting.timeFormat==='12h'})};
@@ -100,7 +105,7 @@ const clusterVehicleRows=(rows,zoom=11)=>{
     const group=groups.find(item=>{
       const latitude=(item.center.lat+lat)/2;
       const metersPerPixel=156543.03392*Math.cos(latitude*Math.PI/180)/2**zoom;
-      const radiusMeters=Math.min(600,72*metersPerPixel);
+      const radiusMeters=72*metersPerPixel;
       return hav(item.center,{lat,lng})<=radiusMeters;
     });
     if(!group){groups.push({center:{lat,lng},items:[vehicle]});return}
@@ -529,15 +534,37 @@ export function SchoolPortalApp(){
 const NAV=[['dashboard','Dashboard',Activity],['map','Map',MapPin],['vehicles','Vehicles',Car],['commands','Commands',Send],['immobilizer','Immobilizer',ShieldCheck],['drivers','Drivers',UserRound],['reports','Reports',FileText],['alerts','Alerts',Bell],['geofences','Geofences',LocateFixed],['maintenance','Maintenance',Wrench],['news','News & Updates',Megaphone],['sensors','Sensors',Radio],['logistics','Logistics',PackageCheck],['delivery','Delivery',Route],['live-video','Live Video',Play],['users','Users',Users],['settings','Settings',Settings],['language','Language',Globe2]];
 
 
-function CompanyLogin({company,onReady}){const schoolLogin=isSchoolPortal(),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[showPassword,setShowPassword]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false);const friendly=e=>({invalid_credentials:schoolLogin?'Incorrect school email or password.':'Incorrect email or password.',account_disabled:'This account is disabled. Contact your administrator.',login_failed:'Unable to sign in right now. Please try again.',captcha_required:'Complete the security check and try again.',school_permission_required:'This account does not have permission to open the School Bus portal.'}[e]||'Unable to sign in. Check your details or contact your administrator.');async function submit(e){e.preventDefault();setError('');setBusy(true);try{const out=await api.login(email,password,readLoginCaptchaToken());if(out.user?.role==='super_admin'){localStorage.setItem('inviha_super_token',out.token);window.location.assign('/admin/');return}setAuthToken(out.token);await onReady(out.user)}catch(ex){setError(friendly(ex.body?.error||ex.message))}finally{setBusy(false)}}return <div className="secureLogin productionLogin" style={{position:"fixed",inset:0,width:"100vw",height:"100dvh",display:"grid",placeItems:"center",margin:0,padding:16,boxSizing:"border-box"}}><LoginVisual/><form onSubmit={submit} autoComplete={schoolLogin?'off':'on'} className="loginForm productionCard masarLoginCard" style={{margin:"auto",width:"min(520px,calc(100vw - 32px))"}}><LoginBadge/><h1>Welcome back</h1><p>{schoolLogin?'Sign in to your School Bus account.':'Sign in to your account.'}</p><label><span className="loginFieldLabel">Email address</span><span className="loginInputWrap"><Mail/><input type="email" name={schoolLogin?'school-account-email':'email'} autoComplete={schoolLogin?'section-schoolbus username':'username'} value={email} onChange={e=>setEmail(e.target.value)} required/></span></label><label><span className="loginFieldLabel">Password</span><span className="fleetPassword loginInputWrap"><Lock/><input type={showPassword?"text":"password"} name={schoolLogin?'school-account-password':'password'} autoComplete={schoolLogin?'section-schoolbus new-password':'current-password'} value={password} onChange={e=>setPassword(e.target.value)} required/><button type="button" aria-label={showPassword?"Hide password":"Show password"} aria-pressed={showPassword} onClick={()=>setShowPassword(!showPassword)}><Eye/></button></span></label>{error&&<div className="loginError">{error}</div>}<LoginCaptcha/><button className="primary loginSubmit" disabled={busy}>{busy?'Logging in...':'Login'}</button><div className="loginSecurityLine"><span/><ShieldCheck/><b>{schoolLogin?'Secure school access':'Secure fleet access'}</b><span/></div><LoginAppLinks/><LoginSupportLinks/><LoginBrandText position="bottom"/></form></div>}
+function CompanyLogin({company,onReady}){
+ const schoolLogin=isSchoolPortal();
+ const rememberEmailKey=schoolLogin?'inviha_school_login_email':'inviha_company_login_email',rememberChoiceKey=schoolLogin?'inviha_school_login_remember':'inviha_company_login_remember';
+ const [email,setEmail]=useState(()=>localStorage.getItem(rememberEmailKey)||''),[password,setPassword]=useState(''),[showPassword,setShowPassword]=useState(false),[remember,setRemember]=useState(()=>localStorage.getItem(rememberChoiceKey)!=='false'),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ const friendly=e=>({invalid_credentials:schoolLogin?'Incorrect school email or password.':'Incorrect email or password.',account_disabled:'This account is disabled. Contact your administrator.',login_failed:'Unable to sign in right now. Please try again.',captcha_required:'Complete the security check and try again.',school_permission_required:'This account does not have permission to open the School Bus portal.'}[e]||'Unable to sign in. Check your details or contact your administrator.');
+ async function submit(e){e.preventDefault();setError('');setBusy(true);localStorage.setItem(rememberChoiceKey,String(remember));if(remember)localStorage.setItem(rememberEmailKey,email.trim());else localStorage.removeItem(rememberEmailKey);try{const out=await api.login(email,password,readLoginCaptchaToken());if(out.user?.role==='super_admin'){localStorage.setItem('inviha_super_token',out.token);window.location.assign('/admin/');return}setAuthToken(out.token);await onReady(out.user)}catch(ex){setError(friendly(ex.body?.error||ex.message))}finally{setBusy(false)}}
+ return <div className="secureLogin productionLogin compactLoginPage"><LoginVisual/><form onSubmit={submit} autoComplete={schoolLogin?'off':'on'} className="loginForm productionCard masarLoginCard loginCompactCard">
+  <LoginBadge/>
+  <h1>Sign in</h1>
+  <p>Access your fleet dashboard.</p>
+  <div className="loginField"><label className="loginFieldLabel" htmlFor="company-login-email">Email address</label><span className="loginInputWrap"><Mail aria-hidden="true"/><input id="company-login-email" type="email" name={schoolLogin?'school-account-email':'email'} autoComplete={schoolLogin?'section-schoolbus username':'username'} placeholder="Enter your email address" value={email} onChange={e=>setEmail(e.target.value)} required/></span></div>
+  <div className="loginField"><div className="loginPasswordHeading"><label className="loginFieldLabel" htmlFor="company-login-password">Password</label><LoginRecoveryLink/></div><span className="fleetPassword loginInputWrap"><Lock aria-hidden="true"/><input id="company-login-password" type={showPassword?"text":"password"} name={schoolLogin?'school-account-password':'password'} autoComplete={schoolLogin?'section-schoolbus new-password':'current-password'} placeholder="Enter your password" value={password} onChange={e=>setPassword(e.target.value)} required/><button type="button" aria-label={showPassword?"Hide password":"Show password"} aria-pressed={showPassword} onClick={()=>setShowPassword(!showPassword)}><Eye aria-hidden="true"/></button></span></div>
+  {error&&<div className="loginFieldError" role="alert">{error}</div>}
+  <label className="loginRemember" htmlFor="company-login-remember"><input id="company-login-remember" type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/>Remember me</label>
+  <LoginCaptcha/>
+  <button className="primary loginSubmit" disabled={busy}>{busy?'Signing in…':'Sign in'}</button>
+  <LoginAppLinks/>
+  <LoginSupportLinks/>
+  <div className="loginCopyright">© 2026 Al Masar Track</div>
+ </form></div>
+}
 
-function Shell({company,page,setPage,alertCount,newsCount,headerBanner,vehicles,news,onContactSuperAdmin,onLogout,children}){const t=useText();useEffect(()=>applyBrowserBranding(company),[company?.id,company?.name,company?.logoData,company?.faviconData,JSON.stringify(readGlobalBranding())]);const sidebar=useStableSidebar();const[profileOpen,setProfileOpen]=useState(false),[geoOpen,setGeoOpen]=useState(false),profileRef=useRef(),sideRef=useRef();useEffect(()=>{const close=e=>{if(profileRef.current&&!profileRef.current.contains(e.target))setProfileOpen(false)};document.addEventListener('mousedown',close);return()=>document.removeEventListener('mousedown',close)},[]);useEffect(()=>{if(!sidebar.expanded)setGeoOpen(false)},[sidebar.expanded]);const onSideKey=e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;const btns=[...sideRef.current.querySelectorAll('nav button,.geoSub button,.logout')].filter(x=>x.offsetParent!==null);if(!btns.length)return;e.preventDefault();let i=btns.indexOf(document.activeElement);if(e.key==='Home')i=0;else if(e.key==='End')i=btns.length-1;else if(e.key==='ArrowDown')i=i<0?0:(i+1)%btns.length;else i=i<0?btns.length-1:(i-1+btns.length)%btns.length;btns[i]?.focus()};return <div className="appShell autoSidebar"><aside ref={sideRef} tabIndex={0} aria-label="Company navigation" className={`side autoSide ${sidebar.expanded?'expanded':''}`} onKeyDown={onSideKey} onMouseEnter={sidebar.onMouseEnter} onMouseLeave={sidebar.onMouseLeave}><Logo company={company}/><nav>{NAV.map(([k,l,I])=>k==='geofences'?<React.Fragment key={k}><button aria-label={t(l)} className={['geofences','poi','parking'].includes(page)?'active':''} onClick={()=>{setGeoOpen(x=>!x)}}><I/><span>{t(l)}</span><ChevronDown className={`navChevron ${geoOpen?'open':''}`}/></button>{geoOpen&&<div className="geoSub"><button className={page==='geofences'?'activeSub':''} onClick={()=>{sidebar.onNavigate();setPage('geofences')}}><LocateFixed/><span>Geofence Zones</span></button><button className={page==='poi'?'activeSub':''} onClick={()=>{sidebar.onNavigate();setPage('poi')}}><MapPin/><span>POI</span></button><button className={page==='parking'?'activeSub':''} onClick={()=>{sidebar.onNavigate();setPage('parking')}}><Car/><span>Parking Slots</span></button></div>}</React.Fragment>:<button key={k} aria-label={t(l)} className={page===k?'active':''} onClick={()=>{sidebar.onNavigate();setPage(k)}}><I/><span>{t(l)}</span>{k==='alerts'&&alertCount>0&&<em>{alertCount}</em>}{k==='news'&&newsCount>0&&<em>{newsCount}</em>}</button>)}</nav><button className="logout" aria-label={t("Logout")} onClick={onLogout}><LogOut/><span>{t("Logout")}</span></button></aside><header className="top"><ExpiryBanner banner={headerBanner}/><div className="topRight"><div className="onlineVehicleBadge"><span></span>{vehicles.filter(v=>String(v.state||v.status||'').toLowerCase()!=='offline').length} vehicles online</div><button className="bell" onClick={()=>setPage('alerts')}><Bell/>{alertCount>0&&<i>{alertCount}</i>}</button><div className="profileWrap" ref={profileRef}><button type="button" className="topProfile" aria-haspopup="menu" aria-expanded={profileOpen} onClick={e=>{e.stopPropagation();setProfileOpen(x=>!x)}}><div className="avatar">{(company?.adminName||company?.contact||company?.name||'M')[0]}</div><div><b>{company?.adminName||company?.contact||company?.name||'Account'}</b><small>{company?.name||'Account'}</small></div><ChevronDown/></button>{profileOpen&&<div className="profileMenu"><button onClick={()=>{setPage('profile');setProfileOpen(false)}}><UserRound/>My Profile</button><button onClick={()=>{setPage('settings');setProfileOpen(false)}}><Settings/>Company Settings</button><button onClick={()=>{setPage('alerts');setProfileOpen(false)}}><Bell/>Notifications</button><button className="menuLogout" onClick={onLogout}><LogOut/>Logout</button></div>}</div></div></header><main>{children}</main></div>}
+function Shell({company,page,setPage,alertCount,newsCount,headerBanner,vehicles,news,onContactSuperAdmin,onLogout,children}){const t=useText();useEffect(()=>applyBrowserBranding(company),[company?.id,company?.name,company?.logoData,company?.faviconData,JSON.stringify(readGlobalBranding())]);const sidebar=useStableSidebar();const[profileOpen,setProfileOpen]=useState(false),[geoOpen,setGeoOpen]=useState(false),profileRef=useRef(),sideRef=useRef();useEffect(()=>{const close=e=>{if(profileRef.current&&!profileRef.current.contains(e.target))setProfileOpen(false)};document.addEventListener('mousedown',close);return()=>document.removeEventListener('mousedown',close)},[]);useEffect(()=>{if(!sidebar.expanded)setGeoOpen(false)},[sidebar.expanded]);const onSideKey=e=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;const btns=[...sideRef.current.querySelectorAll('nav button,.geoSub button,.logout')].filter(x=>x.offsetParent!==null);if(!btns.length)return;e.preventDefault();let i=btns.indexOf(document.activeElement);if(e.key==='Home')i=0;else if(e.key==='End')i=btns.length-1;else if(e.key==='ArrowDown')i=i<0?0:(i+1)%btns.length;else i=i<0?btns.length-1:(i-1+btns.length)%btns.length;btns[i]?.focus()};return <div className="appShell autoSidebar"><aside ref={sideRef} tabIndex={0} aria-label="Company navigation" className={`side autoSide ${sidebar.expanded?'expanded':''}`} onKeyDown={onSideKey} onMouseEnter={sidebar.onMouseEnter} onMouseLeave={sidebar.onMouseLeave}><Logo company={company}/><nav>{NAV.map(([k,l,I])=>k==='geofences'?<React.Fragment key={k}><button aria-label={t(l)} className={['geofences','poi','parking'].includes(page)?'active':''} onClick={()=>{setGeoOpen(x=>!x)}}><I/><span>{t(l)}</span><ChevronDown className={`navChevron ${geoOpen?'open':''}`}/></button>{geoOpen&&<div className="geoSub"><button className={page==='geofences'?'activeSub':''} onClick={()=>{sidebar.onNavigate();setPage('geofences')}}><LocateFixed/><span>Geofence Zones</span></button><button className={page==='poi'?'activeSub':''} onClick={()=>{sidebar.onNavigate();setPage('poi')}}><MapPin/><span>POI</span></button><button className={page==='parking'?'activeSub':''} onClick={()=>{sidebar.onNavigate();setPage('parking')}}><Car/><span>Parking Slots</span></button></div>}</React.Fragment>:<button key={k} aria-label={t(l)} className={page===k?'active':''} onClick={()=>{sidebar.onNavigate();setPage(k)}}><I/><span>{t(l)}</span>{k==='alerts'&&alertCount>0&&<em className="alertCountBadge">{alertCount>9?'9+':alertCount}</em>}{k==='news'&&newsCount>0&&<em>{newsCount}</em>}</button>)}</nav><button className="logout" aria-label={t("Logout")} onClick={onLogout}><LogOut/><span>{t("Logout")}</span></button></aside><header className="top"><ExpiryBanner banner={headerBanner}/><div className="topRight"><div className="onlineVehicleBadge"><span></span>{vehicles.filter(v=>String(v.state||v.status||'').toLowerCase()!=='offline').length} vehicles online</div><button type="button" className="bell bellRefresh" aria-label={`${alertCount} unread alerts`} title="Alerts" onClick={()=>setPage('alerts')}><Bell/><i aria-hidden="true">{alertCount>9?'9+':alertCount}</i></button><div className="profileWrap" ref={profileRef}><button type="button" className="topProfile" aria-haspopup="menu" aria-expanded={profileOpen} onClick={e=>{e.stopPropagation();setProfileOpen(x=>!x)}}><div className="avatar">{(company?.adminName||company?.contact||company?.name||'M')[0]}</div><div><b>{company?.adminName||company?.contact||company?.name||'Account'}</b><small>{company?.name||'Account'}</small></div><ChevronDown/></button>{profileOpen&&<div className="profileMenu"><button onClick={()=>{setPage('profile');setProfileOpen(false)}}><UserRound/>My Profile</button><button onClick={()=>{setPage('settings');setProfileOpen(false)}}><Settings/>Company Settings</button><button onClick={()=>{setPage('alerts');setProfileOpen(false)}}><Bell/>Notifications</button><button className="menuLogout" onClick={onLogout}><LogOut/>Logout</button></div>}</div></div></header><main>{children}</main></div>}
 
-function KPI({icon:I,label,value,sub,tone='blue',iconStyle,cardStyle,lightText=false,centered=false,onClick}){const textStyle=lightText?{color:'#fff'}:undefined;return <div className={`kpi${centered?' statusKpi':''}`} style={cardStyle} role={onClick?'button':undefined} tabIndex={onClick?0:undefined} onClick={onClick} onKeyDown={e=>{if(onClick&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onClick()}}}><span className={tone} style={iconStyle}><I/></span><div><small style={textStyle}>{label}</small><b style={textStyle}>{value}</b><em style={textStyle}>{sub}</em></div></div>}
+function AnimatedCount({value}){const target=Number(value),safeTarget=Number.isFinite(target)?target:0,[count,setCount]=useState(0),current=useRef(0);useEffect(()=>{const from=current.current,reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;if(reduced||from===safeTarget){current.current=safeTarget;setCount(safeTarget);return}const started=performance.now(),duration=700;let frame;const tick=now=>{const progress=Math.min(1,(now-started)/duration),eased=1-Math.pow(1-progress,3),next=Math.round(from+(safeTarget-from)*eased);current.current=next;setCount(next);if(progress<1)frame=requestAnimationFrame(tick);else{current.current=safeTarget;setCount(safeTarget)}};frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame)},[safeTarget]);return <>{count.toLocaleString()}</>}
+function KPI({icon:I,label,value,sub,tone='blue',iconStyle,cardStyle,lightText=false,centered=false,onClick}){const textStyle=lightText?{color:'#fff'}:undefined;return <div className={`kpi${centered?' statusKpi':''}`} style={cardStyle} role={onClick?'button':undefined} tabIndex={onClick?0:undefined} onClick={onClick} onKeyDown={e=>{if(onClick&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onClick()}}}><span className={tone} style={iconStyle}><I/></span><div><small style={textStyle}>{label}</small><b style={textStyle}><AnimatedCount value={value}/></b><em style={textStyle}>{sub}</em></div></div>}
 function PageHead({title,subtitle,actions}){const t=useText();return <div className="pageHead"><div><h1>{t(title)}</h1><p>{subtitle}</p></div><div className="headActions">{actions}</div></div>}
 
 function DashboardPage({company,vehicles,posBy,store,setPage}){
   const [filter,setFilter]=useState(null);
+  const [mapFitRequest,setMapFitRequest]=useState(0);
 
   const normalizeState=(v)=>{
     const s=String(v.state||'').toLowerCase();
@@ -570,6 +597,7 @@ function DashboardPage({company,vehicles,posBy,store,setPage}){
   const filteredVehicles=filter==='all'
     ? vehicles
     : vehicles.filter(v=>normalizeState(v)===filter);
+  const positionedVehicleCount=vehicles.filter(mapHasPosition).length;
 
   const expiringVehicles=vehicles.map(v=>{
     const raw=v?.local?.expirationDate||v?.local?.expiryDate||v?.local?.expiry||v?.local?.expiresAt||v?.expirationDate||v?.expiryDate||v?.expiry;
@@ -630,8 +658,8 @@ function DashboardPage({company,vehicles,posBy,store,setPage}){
 
         <div className="donutWrap">
           <div key={Object.values(counts).join(':')} className="statusDonut" style={{
-            width:280,
-            height:280,
+            width:240,
+            height:240,
             borderRadius:'50%',
             background:`conic-gradient(
               ${statusColor.moving} 0 ${movingPct}%,
@@ -646,7 +674,7 @@ function DashboardPage({company,vehicles,posBy,store,setPage}){
           }}>
             <div className="statusDonutCenter" style={{
               position:'absolute',
-              inset:40,
+              inset:34,
               background:'white',
               borderRadius:'50%',
               display:'flex',
@@ -654,8 +682,8 @@ function DashboardPage({company,vehicles,posBy,store,setPage}){
               justifyContent:'center',
               flexDirection:'column'
             }}>
-              <strong style={{fontSize:38,lineHeight:1}}>{counts.total}</strong>
-              <span style={{marginTop:10,color:'#64748b',fontWeight:600}}>Total Vehicles</span>
+              <strong style={{fontSize:34,lineHeight:1}}><AnimatedCount value={counts.total}/></strong>
+              <span style={{marginTop:7,color:'#64748b',fontWeight:600}}>Total Vehicles</span>
             </div>
           </div>
 
@@ -677,7 +705,7 @@ function DashboardPage({company,vehicles,posBy,store,setPage}){
                   <small>{desc}</small>
                 </span>
                 <strong>
-                  {c}
+                  <AnimatedCount value={c}/>
                   <small>{p}%</small>
                 </strong>
               </div>
@@ -686,18 +714,24 @@ function DashboardPage({company,vehicles,posBy,store,setPage}){
         </div>
       </div>
 
-      <div className="sideStack">
-        <div className="card quick">
-          <h2>Quick Actions</h2>
-          <div>
-            <button onClick={()=>setPage('map')}><MapPin/>View Map<small>Track vehicles</small></button>
-            <button onClick={()=>setPage('reports')}><FileText/>Generate Report<small>Trips, stops, alerts</small></button>
-            <button onClick={()=>setPage('alerts')}><Bell/>View Alerts<small>Recent notifications</small></button>
-            <button onClick={()=>setPage('users')}><Settings/>Manage Users<small>Company access</small></button>
+      <div className="sideStack dashboardSideStack">
+        <div className="card dashboardMapCard">
+          <div className="dashboardMapHeading">
+            <div><h2>Live Vehicle Map</h2><p>All available vehicle locations</p></div>
+            <button type="button" className="dashboardMapFitButton" aria-label="Fit all vehicles on the map" title="Fit all vehicles" disabled={!positionedVehicleCount} onClick={()=>setMapFitRequest(request=>request+1)}><Maximize/>Fit all vehicles</button>
+          </div>
+          <div className="dashboardMapCanvas dashboardVehicleMap">
+            <MapContainer key={String(company?.id||company?.name||'company')} center={[25.2854,51.531]} zoom={8} minZoom={2} maxZoom={18} zoomControl={false} scrollWheelZoom={false} style={{width:'100%',height:'100%'}}>
+              <Basemap/>
+              <ZoomControl position="topright"/>
+              <DashboardMapViewport vehicles={vehicles} settings={company?.settings} fitRequest={mapFitRequest}/>
+            </MapContainer>
+            {!positionedVehicleCount&&<div className="dashboardMapEmpty">No vehicle locations available</div>}
           </div>
         </div>
+
         <div className="card expiryDashboardCard">
-          <div className="expiryDashboardHead"><div><h2><CalendarDays/>Vehicle Expiry</h2><p>Vehicles expiring within 30 days</p></div><span>{expiringVehicles.length}</span></div>
+          <div className="expiryDashboardHead"><div><h2><CalendarDays/>Vehicle Expiry</h2><p>Vehicles expiring within 30 days</p></div><span><AnimatedCount value={expiringVehicles.length}/></span></div>
           <div className="expiryDashboardList">
             {expiringVehicles.length?expiringVehicles.map(({vehicle:v,raw,days})=><button key={v.id} type="button" onClick={()=>setPage('vehicles')} className={days<0?'expired':days<=7?'urgent':'soon'}>
               <span className="expiryDashboardIcon"><Car/></span>
@@ -845,7 +879,7 @@ function VehicleStatusList({vehicles,selected,setSelected,onGeofences,onVehicles
  const statusCount=key=>key==='all'?classified.length:classified.filter(({status})=>status.group===key).length;
  const visibleRows=classified.filter(({v,status})=>(statusFilter==='all'||status.group===statusFilter)&&[v.name,v.plate,v.local?.id,v.id,v.currentDriver?.name].join(' ').toLowerCase().includes(q.trim().toLowerCase()));
  const vehicleRow=({v,status})=><div key={v.id} data-state={status.group} className={'mapVehicleRow '+(selected?.id===v.id?'selected':'')}>
-  <button className="mapVehicleMain" onClick={()=>act(setSelected,v)}><span className="catIcon">{imageOf(v)?<VehicleImage v={v}/>:<VehicleSymbol category={v.category}/>}</span><span className="mapVehicleIdentity"><b><span className="mapVehicleName">{v.name}</span><em className="mapVehicleBadge">{status.group==='moving'?'Online':stateLabel(status.group)}</em></b><small>{[v.plate,v.currentDriver?.name].filter(Boolean).join(' · ')||'Not identified'}</small><small className="mapVehicleUpdated"><Clock3/> {cardUpdatedAt(v)} <span className="mapVehicleAge">({communicationAgeLabel(v)})</span></small></span><span className="mapVehicleState"><strong key={status.speed} className="mapRowSpeed"><span className="speedNumber">{status.speed==null?'—':Math.round(status.speed)}</span> <small>Kph</small></strong><span className="mapVehicleSignals"><EngineIndicator value={status.group==='moving'?true:engineState(v.position)} source={v.position?.telemetry?.engineSource} iconOnly/></span></span></button>
+  <button className="mapVehicleMain" onClick={()=>act(setSelected,v)}><span className="catIcon">{imageOf(v)?<VehicleImage v={v}/>:<VehicleSymbol category={v.category}/>}</span><span className="mapVehicleIdentity"><b><span className="mapVehicleName">{v.name}</span><em className="mapVehicleBadge">{status.group==='moving'?'Online':stateLabel(status.group)}</em></b><small>{[v.plate,v.currentDriver?.name].filter(Boolean).join(' · ')||'Not identified'}</small><small className="mapVehicleUpdated"><Clock3/> {cardUpdatedAt(v)} <span className="mapVehicleAge">({communicationAgeLabel(v)})</span></small></span><span className="mapVehicleState"><strong key={status.speed} className="mapRowSpeed"><span className="speedNumber">{status.speed==null?'—':Math.round(status.speed)}</span> <small>Kph</small></strong><span className="mapVehicleSignals"><span className="mapVehicleStatusDot" role="img" aria-label={'Vehicle status: '+stateLabel(status.group)} title={'Vehicle status: '+stateLabel(status.group)}/></span></span></button>
 
   <button className="mapVehicleMore" aria-label={'Actions for '+v.name} aria-expanded={menu?.id===v.id} onClick={e=>toggleMenu(e,v)}><span className="actionDots" aria-hidden="true"><b/><b/><b/></span></button>
  </div>;
@@ -1077,14 +1111,15 @@ function LiveVehiclePanel({vehicle,company,store,mapAccess}){
     </div>}
   </aside>
 }
-function VehicleClusterMarker({group,onReveal}){
+function VehicleClusterMarker({group,onReveal,compact=false}){
   const map=useMap();
   const ids=group.items.map(vehicle=>vehicle.id).sort().join('-');
+  const markerSize=compact?36:44;
   const icon=L.divIcon({
     className:'vehicle-cluster-marker-wrap',
-    html:`<div class="vehicle-cluster-marker"><span>${group.items.length}</span></div>`,
-    iconSize:[44,44],
-    iconAnchor:[22,22]
+    html:`<div class="vehicle-cluster-marker${compact?' compact':''}"><span>${group.items.length}</span></div>`,
+    iconSize:[markerSize,markerSize],
+    iconAnchor:[markerSize/2,markerSize/2]
   });
   return <Marker
     key={`cluster-${ids}`}
@@ -1101,7 +1136,7 @@ function VehicleClusterMarker({group,onReveal}){
       const reveal=()=>{
         if(finished)return;
         finished=true;
-        onReveal?.(`cluster-${ids}`,map);
+        onReveal?.(`cluster-${ids}`,map,group.items);
       };
       map.once('moveend',reveal);
       const samePoint=locations.every(([lat,lng])=>lat===locations[0][0]&&lng===locations[0][1]);
@@ -1114,6 +1149,125 @@ function VehicleClusterMarker({group,onReveal}){
       window.setTimeout(reveal,1100);
     }}}
   />;
+}
+
+function DashboardMapViewport({vehicles,settings,fitRequest}){
+  const map=useMap();
+  const [zoom,setZoom]=useState(8);
+  const [clusterReveal,setClusterReveal]=useState(null);
+  const locatedVehicles=useMemo(()=>vehicles.filter(mapHasPosition),[vehicles]);
+  const latestPoints=useRef([]);
+  latestPoints.current=locatedVehicles.map(vehicle=>[Number(vehicle.position.latitude),Number(vehicle.position.longitude)]);
+  const fitKey=locatedVehicles.map(vehicle=>String(vehicle.id??vehicle.imei??vehicle.name)).sort().join('|');
+  const clusters=useMemo(()=>clusterVehicleRows(locatedVehicles,zoom),[locatedVehicles,zoom]);
+  const revealedIds=new Set((clusterReveal?.items||[]).map(vehicle=>String(vehicle.id)));
+  const remainingClusters=clusters.map(group=>{
+    const items=group.items.filter(vehicle=>!revealedIds.has(String(vehicle.id)));
+    if(!items.length)return null;
+    if(items.length===group.items.length)return group;
+    return{items,center:{
+      lat:items.reduce((sum,vehicle)=>sum+Number(vehicle.position.latitude),0)/items.length,
+      lng:items.reduce((sum,vehicle)=>sum+Number(vehicle.position.longitude),0)/items.length
+    }};
+  }).filter(Boolean);
+  const singleMapVehicles=[...remainingClusters.filter(group=>group.items.length===1).map(group=>group.items[0]),...(clusterReveal?.items||[])];
+  const revealVehicleCluster=(key,currentMap,items)=>{
+    const group=items?.length?{items}:clusters.find(item=>`cluster-${item.items.map(vehicle=>vehicle.id).sort().join('-')}`===key);
+    if(!group)return;
+    const points=group.items.map(vehicle=>currentMap.latLngToLayerPoint([Number(vehicle.position.latitude),Number(vehicle.position.longitude)]));
+    let closest=Infinity;
+    for(let i=0;i<points.length;i++)for(let j=i+1;j<points.length;j++)closest=Math.min(closest,points[i].distanceTo(points[j]));
+    const spiderfied=closest<76;
+    const center=points.reduce((sum,point)=>L.point(sum.x+point.x/group.items.length,sum.y+point.y/group.items.length),L.point(0,0));
+    const radius=Math.max(48,Math.min(72,group.items.length*18));
+    const positions=Object.fromEntries(group.items.map((vehicle,index)=>{
+      const source=[Number(vehicle.position.latitude),Number(vehicle.position.longitude)];
+      const angle=-Math.PI/2+index*2*Math.PI/group.items.length;
+      const display=spiderfied?currentMap.layerPointToLatLng(L.point(center.x+Math.cos(angle)*radius,center.y+Math.sin(angle)*radius)):{lat:source[0],lng:source[1]};
+      return[String(vehicle.id),{source,display:[display.lat,display.lng]}];
+    }));
+    setClusterReveal({key,items:group.items,positions,spiderfied});
+  };
+
+  useEffect(()=>{
+    const points=latestPoints.current;
+    if(!points.length)return;
+    const bounds=L.latLngBounds(points);
+    if(!bounds.isValid())return;
+    const requested=fitRequest>0;
+    const samePoint=points.every(([lat,lng])=>lat===points[0][0]&&lng===points[0][1]);
+    if(points.length===1||samePoint){map.setView(bounds.getCenter(),requested?15:10,{animate:requested});return}
+    map.fitBounds(bounds,{padding:[36,36],maxZoom:requested?16:10,animate:requested});
+  },[map,fitKey,fitRequest]);
+
+  return <>
+    <MapZoomTracker onZoomChange={setZoom}/>
+    {clusterReveal?.spiderfied&&clusterReveal.items.map(vehicle=>{
+      const point=clusterReveal.positions[String(vehicle.id)];
+      return point?<Polyline key={`dashboard-cluster-leg-${vehicle.id}`} positions={[point.source,point.display]} pathOptions={{color:'#2587ef',weight:2,opacity:.7,dashArray:'4 5',interactive:false}}/>:null;
+    })}
+    {remainingClusters.filter(group=>group.items.length>1).map(group=><VehicleClusterMarker key={`dashboard-cluster-${group.items.map(vehicle=>vehicle.id).sort().join('-')}`} group={group} compact onReveal={revealVehicleCluster}/>) }
+    {singleMapVehicles.map(vehicle=>{
+      const position=vehicle.position;
+      const presentation=mapStatus(vehicle,settings);
+      const markerState=['untracked','offline','never'].includes(presentation.group)?presentation.group:presentation.operating;
+      const revealedPosition=clusterReveal?.positions?.[String(vehicle.id)]?.display;
+      return <SmoothMarker
+        key={`dashboard-vehicle-${vehicle.id}`}
+        fixTime={position.fixTime||position.deviceTime||position.serverTime}
+        position={revealedPosition||[position.latitude,position.longitude]}
+        icon={markerIcon(vehicle.category,markerState,vehicle.name,vehicle.speed,imageOf(vehicle),presentation.fresh,vehicleHeading(vehicle))}
+      >
+        <Popup>
+          <strong>{vehicle.name||'Vehicle'}</strong>
+          <div>{vehicle.plate||vehicle.registration||'No plate'}</div>
+          <div>{stateLabel(presentation.group)} · {kmh(position.speed)} km/h</div>
+        </Popup>
+      </SmoothMarker>;
+    })}
+  </>;
+}
+
+function MapAnchoredPopover({anchorRef,className,onClose,ariaLabel,children}){
+  const popoverRef=useRef(null);
+  const [placement,setPlacement]=useState({left:-1000,top:-1000,opensRight:false,pointerY:24});
+  useLayoutEffect(()=>{
+    const place=()=>{
+      const anchor=anchorRef.current?.getBoundingClientRect();
+      const panel=popoverRef.current?.getBoundingClientRect();
+      if(!anchor||!panel)return;
+      const leftSpace=anchor.left-10;
+      const rightSpace=window.innerWidth-anchor.right-10;
+      const opensRight=leftSpace<panel.width&&rightSpace>leftSpace;
+      const left=opensRight
+        ? Math.max(8,Math.min(anchor.right+10,window.innerWidth-panel.width-8))
+        : Math.max(8,Math.min(anchor.left-panel.width-10,window.innerWidth-panel.width-8));
+      const top=Math.max(8,Math.min(anchor.top+anchor.height/2-panel.height/2,window.innerHeight-panel.height-8));
+      const pointerY=Math.max(14,Math.min(panel.height-14,anchor.top+anchor.height/2-top));
+      setPlacement({left,top,opensRight,pointerY});
+    };
+    place();
+    window.addEventListener('resize',place);
+    window.addEventListener('scroll',place,true);
+    const outside=event=>{
+      if(popoverRef.current?.contains(event.target)||anchorRef.current?.contains(event.target))return;
+      onClose();
+    };
+    const escape=event=>{
+      if(event.key==='Escape'){onClose();anchorRef.current?.focus()}
+    };
+    document.addEventListener('pointerdown',outside,true);
+    document.addEventListener('keydown',escape,true);
+    return()=>{
+      window.removeEventListener('resize',place);
+      window.removeEventListener('scroll',place,true);
+      document.removeEventListener('pointerdown',outside,true);
+      document.removeEventListener('keydown',escape,true);
+    };
+  },[anchorRef,onClose]);
+  return createPortal(<div ref={popoverRef} className={`mapAnchoredPopoverShell ${placement.opensRight?'opens-right':''}`} style={{left:placement.left,top:placement.top,'--map-pointer-y':`${placement.pointerY}px`}}>
+    <div className={`mapAnchoredPopover ${className}`} role="dialog" aria-label={ariaLabel}>{children}</div>
+  </div>,document.body);
 }
 
 function MapPage({vehicles,selected,setSelected,setPage,alerts,store,setStore,company,toast,userRole,userPermissions}){
@@ -1134,6 +1288,7 @@ function MapPage({vehicles,selected,setSelected,setPage,alerts,store,setStore,co
   const [mapStyle,setMapStyle]=useState('');
   useEffect(()=>{if(!availableMaps.length)return;setMapStyle(current=>availableMaps.some(map=>map.id===current)?current:(mapConfig.defaultBase||availableMaps[0].id))},[mapConfig]);
   const [layerMenu,setLayerMenu]=useState(false);
+  const layersTriggerRef=useRef(null),moreToolsTriggerRef=useRef(null);
   const [commandVehicle,setCommandVehicle]=useState(null);
   const openHistory=(v,range)=>{localStorage.setItem('inviha.playbackPreset',JSON.stringify({vehicleId:String(v.id),deviceId:String(v.deviceId||''),range}));setSelected(v);setPage('playback')};
 
@@ -1144,10 +1299,10 @@ function MapPage({vehicles,selected,setSelected,setPage,alerts,store,setStore,co
     geofences:company.settings?.showGeofences!==false
   });
 
-  const points=vehicles
-    .filter(v=>Number.isFinite(v.position?.latitude)&&Number.isFinite(v.position?.longitude))
-    .map(v=>[v.position.latitude,v.position.longitude]);
-  const locatedVehicles=useMemo(()=>vehicles.filter(v=>Number.isFinite(v.position?.latitude)&&Number.isFinite(v.position?.longitude)),[vehicles]);
+ const points=vehicles
+    .filter(mapHasPosition)
+    .map(v=>[Number(v.position.latitude),Number(v.position.longitude)]);
+  const locatedVehicles=useMemo(()=>vehicles.filter(mapHasPosition),[vehicles]);
   const vehicleClusters=useMemo(()=>clusterVehicleRows(locatedVehicles,clusterZoom),[locatedVehicles,clusterZoom]);
   const revealedGroup=clusterReveal?vehicleClusters.find(group=>`cluster-${group.items.map(vehicle=>vehicle.id).sort().join('-')}`===clusterReveal.key):null;
   const singleMapVehicles=clusterEnabled?[...vehicleClusters.filter(group=>group.items.length===1).map(group=>group.items[0]),...(revealedGroup?.items||[])]:locatedVehicles;
@@ -1169,8 +1324,8 @@ function MapPage({vehicles,selected,setSelected,setPage,alerts,store,setStore,co
     setClusterReveal({key,positions,spiderfied});
   };
   const activePoints=vehicles
-    .filter(v=>Number.isFinite(v.position?.latitude)&&Number.isFinite(v.position?.longitude)&&!['offline','untracked','never'].includes(mapStatus(v,company.settings).group))
-    .map(v=>[v.position.latitude,v.position.longitude]);
+    .filter(v=>mapHasPosition(v)&&!['offline','untracked','never'].includes(mapStatus(v,company.settings).group))
+    .map(v=>[Number(v.position.latitude),Number(v.position.longitude)]);
   const initialFocusPoints=activePoints.length?activePoints:points;
   const configuredCenter=[Number(mapConfig?.center?.latitude)||25.2854,Number(mapConfig?.center?.longitude)||51.531];
   const configuredZoom=Math.max(2,Math.min(20,Number(mapConfig?.zoom)||11));
@@ -1333,21 +1488,23 @@ function MapPage({vehicles,selected,setSelected,setPage,alerts,store,setStore,co
         <LiveSpeed vehicle={selected} rules={store.alertRules} companyId={company.id} companySettings={company.settings}/>
         <LiveVehiclePanel vehicle={selected} company={company} store={store} mapAccess={mapConfig?.allowed}/>
         <div className="lockedMapControls">
-<button title="Zoom in" aria-label="Zoom in" onClick={()=>mapRef.current?.zoomIn()}>+</button>
-<button title="Zoom out" aria-label="Zoom out" onClick={()=>mapRef.current?.zoomOut()}>−</button>
-<button title="Playback" onClick={()=>setPage('playback')}><History/></button>
-<button title="Full screen" onClick={e=>{const page=e.currentTarget.closest('.lockedMapPage');if(document.fullscreenElement)document.exitFullscreen?.();else page?.requestFullscreen?.()}}><Maximize/></button>
-<button title="Map layers" onClick={()=>setLayerMenu(x=>!x)}><Layers3/></button>
-<button title={clusterEnabled?'Disable vehicle clustering':'Enable vehicle clustering'} aria-label={clusterEnabled?'Disable vehicle clustering':'Enable vehicle clustering'} className={clusterEnabled?'active':''} onClick={()=>setClusterEnabled(x=>!x)}><CircleDot/></button>
-<button title="My current location" aria-label="My current location" onClick={()=>{setFollow(false);setLocationRequest(x=>x+1)}}><LocateFixed/></button>
-<button title="Locate vehicle" onClick={()=>{if(selected?.position)setFollow(true);else toast('Select a vehicle first')}}><Navigation/></button>
-<button title="Live route trail" className={trail?'active':''} onClick={()=>setTrail(x=>!x)}><Route/></button>
-<button title="Map options" onClick={()=>setMoreTools(x=>!x)}><MoreHorizontal/></button></div>
+<div className="mapZoomGroup" role="group" aria-label="Map zoom">
+<button data-map-label="Zoom in" aria-label="Zoom in" onClick={()=>mapRef.current?.zoomIn()}>+</button>
+<button data-map-label="Zoom out" aria-label="Zoom out" onClick={()=>mapRef.current?.zoomOut()}>−</button>
+</div>
+<button data-map-label={clusterEnabled?'Clusters: on':'Clusters: off'} aria-label={clusterEnabled?'Disable vehicle clustering':'Enable vehicle clustering'} aria-pressed={clusterEnabled} className={clusterEnabled?'active':''} onClick={()=>{setClusterReveal(null);setClusterEnabled(x=>!x)}}><CircleDot/></button>
+<button data-map-label="Playback" aria-label="Playback" onClick={()=>setPage('playback')}><History/></button>
+<button data-map-label="Full screen" aria-label="Full screen" onClick={e=>{const page=e.currentTarget.closest('.lockedMapPage');if(document.fullscreenElement)document.exitFullscreen?.();else page?.requestFullscreen?.()}}><Maximize/></button>
+<button ref={layersTriggerRef} data-map-label="Map layers" aria-label="Map layers" aria-expanded={layerMenu} onClick={()=>{setMoreTools(false);setLayerMenu(x=>!x)}}><Layers3/></button>
+<button data-map-label="My current location" aria-label="My current location" onClick={()=>{setFollow(false);setLocationRequest(x=>x+1)}}><LocateFixed/></button>
+<button data-map-label="Locate selected vehicle" aria-label="Locate selected vehicle" onClick={()=>{if(selected?.position)setFollow(true);else toast('Select a vehicle first')}}><Navigation/></button>
+<button data-map-label="Live route trail" aria-label="Live route trail" aria-pressed={trail} className={trail?'active':''} onClick={()=>setTrail(x=>!x)}><Route/></button>
+<button ref={moreToolsTriggerRef} data-map-label="Map options" aria-label="Map options" aria-expanded={moreTools} onClick={()=>{setLayerMenu(false);setMoreTools(x=>!x)}}><MoreHorizontal/></button></div>
 {(availableMaps.length>0||mapConfig?.allowed?.mapillary)&&<div className="mapType"><label><span>Map</span><select aria-label="Select map" value={mapStyle} onChange={e=>setMapStyle(e.target.value)}>{availableMaps.map(map=><option key={map.id} value={map.id}>{map.label}</option>)}</select></label>{mapConfig?.allowed?.mapillary&&<button className="mapillaryStreetButton" title="Open Mapillary street imagery at the selected vehicle" onClick={openMapillary}>Mapillary ↗</button>}</div>}
-{moreTools&&<div className="mapMoreOptions"><h3>Map options</h3><button onClick={()=>{setFitRequest(x=>x+1);setFollow(false)}}><Maximize/>Fit all vehicles</button><button disabled={!selected?.position} onClick={()=>setFollow(x=>!x)}><Navigation/>{follow?'Stop following':'Follow selected vehicle'}</button><label><input type="checkbox" checked={labels} onChange={e=>setLabels(e.target.checked)}/>Vehicle labels</label><label><input type="checkbox" checked={trail} onChange={e=>setTrail(e.target.checked)}/>Live route trail</label><label><span>Trail duration</span><select aria-label="Trail duration preset" value={[5,15,30,60,180,360,720,1440].includes(trailMinutes)?trailMinutes:'custom'} onChange={e=>{if(e.target.value==='custom')return;setTrailMinutes(Number(e.target.value));localStorage.setItem('inviha.trailMinutes',e.target.value)}}><option value="custom">Custom</option>{[5,15,30,60,180,360,720,1440].map(n=><option key={n} value={n}>{n} minutes</option>)}</select><input aria-label="Custom trail duration in minutes" type="number" min="1" max="1440" value={trailMinutes} onChange={e=>{const n=Math.max(1,Math.min(1440,Number(e.target.value)||1));setTrailMinutes(n);localStorage.setItem('inviha.trailMinutes',String(n))}}/></label><button disabled={!selected?.position} onClick={async()=>{try{const p=selected.position;await navigator.clipboard.writeText(p.latitude+', '+p.longitude);toast('Vehicle coordinates copied')}catch{toast('Unable to copy coordinates')}}}><MapPin/>Copy vehicle coordinates</button></div>}
+{moreTools&&<MapAnchoredPopover anchorRef={moreToolsTriggerRef} className="mapMoreOptions" ariaLabel="Map options" onClose={()=>setMoreTools(false)}><h3>Map options</h3><button onClick={()=>{setFitRequest(x=>x+1);setFollow(false)}}><Maximize/>Fit all vehicles</button><button disabled={!selected?.position} onClick={()=>setFollow(x=>!x)}><Navigation/>{follow?'Stop following':'Follow selected vehicle'}</button><label><input type="checkbox" checked={labels} onChange={e=>setLabels(e.target.checked)}/>Vehicle labels</label><label><input type="checkbox" checked={trail} onChange={e=>setTrail(e.target.checked)}/>Live route trail</label><label><span>Trail duration</span><select aria-label="Trail duration preset" value={[5,15,30,60,180,360,720,1440].includes(trailMinutes)?trailMinutes:'custom'} onChange={e=>{if(e.target.value==='custom')return;setTrailMinutes(Number(e.target.value));localStorage.setItem('inviha.trailMinutes',e.target.value)}}><option value="custom">Custom</option>{[5,15,30,60,180,360,720,1440].map(n=><option key={n} value={n}>{n} minutes</option>)}</select><input aria-label="Custom trail duration in minutes" type="number" min="1" max="1440" value={trailMinutes} onChange={e=>{const n=Math.max(1,Math.min(1440,Number(e.target.value)||1));setTrailMinutes(n);localStorage.setItem('inviha.trailMinutes',String(n))}}/></label><button disabled={!selected?.position} onClick={async()=>{try{const p=selected.position;await navigator.clipboard.writeText(p.latitude+', '+p.longitude);toast('Vehicle coordinates copied')}catch{toast('Unable to copy coordinates')}}}><MapPin/>Copy vehicle coordinates</button></MapAnchoredPopover>}
 {trail&&<div className="liveTrailCaption" role="status">{trailStatus||((selected?.name||'Vehicle')+' · Last '+trailMinutes+' minutes · Recorded GPS trail')}</div>}
         {layerMenu&&
-          <div className="lockedLayerMenu"><button className="layerManage" onClick={()=>setPage('geofences')}>Manage geofences / POI</button>
+          <MapAnchoredPopover anchorRef={layersTriggerRef} className="lockedLayerMenu" ariaLabel="Map layers" onClose={()=>setLayerMenu(false)}><button className="layerManage" onClick={()=>setPage('geofences')}>Manage geofences / POI</button>
 
             <label>
               <input
@@ -1385,7 +1542,7 @@ function MapPage({vehicles,selected,setSelected,setPage,alerts,store,setStore,co
               Parking Slots
             </label>
 
-          </div>
+          </MapAnchoredPopover>
         }
 
       </div>

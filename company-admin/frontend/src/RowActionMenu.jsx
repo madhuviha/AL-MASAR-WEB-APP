@@ -94,6 +94,7 @@ export default function RowActionMenu({label='Row actions',items=[],trigger='gea
       <Icon aria-hidden="true"/>
     </button>
     {open&&createPortal(<div ref={menuRef} className="rowActionPopover" style={{left:position.left,top:position.top}} role="menu" aria-label={label} onClick={event=>event.stopPropagation()}>
+      <div className="rowActionContext" aria-hidden="true"><small>Actions for</small><strong title={subject}>{subject}</strong></div>
       {items.map((item,index)=>{
         const ItemIcon=item.icon;
         return <button key={`${item.label}-${index}`} type="button" role="menuitem" className={item.tone==='danger'?'danger':''} disabled={item.disabled} onClick={()=>chooseItem(item)}>

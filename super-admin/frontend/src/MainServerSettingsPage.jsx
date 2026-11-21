@@ -20,9 +20,8 @@ const defaultUserMapAccess = () => Object.fromEntries(mapAccessOptions.map(([key
 const allUserMapAccess = () => Object.fromEntries(mapAccessOptions.map(([key]) => [key, true]));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
-const imageFileToDataUrl = (file, { maxDimension = 512, quality = 0.82, rasterOnly = false } = {}) => new Promise((resolve, reject) => {
+const imageFileToDataUrl = (file, { maxDimension = 512, quality = 0.82 } = {}) => new Promise((resolve, reject) => {
   if (!file) return reject(new Error("Choose an image file."));
-  if (rasterOnly && !["image/png", "image/jpeg", "image/webp"].includes(file.type)) return reject(new Error("Login backgrounds must be PNG, JPEG or WebP."));
   if (!String(file.type || "").startsWith("image/")) return reject(new Error("Choose a PNG, JPEG, WebP, SVG or icon image."));
   const reader = new FileReader();
   reader.onerror = () => reject(new Error("The selected image could not be read."));
@@ -70,7 +69,7 @@ function ImageSetting({ label, field, value, fallback, compact, inputRef, status
     {value ? <img src={value} alt="" /> : <span>{fallback}</span>}
     <button type="button" onClick={() => inputRef.current?.click()}><Upload />Choose {label.replace("Default ", "")}</button>
     <button type="button" onClick={() => onReset(field)} disabled={status?.status === "processing"}><Trash2 />{resetLabel}</button>
-    <input ref={inputRef} hidden type="file" accept={field === "loginBackgroundData" ? "image/png,image/jpeg,image/webp" : "image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon"} onChange={(event) => onChoose(field, event.currentTarget, field === "loginBackgroundData" ? { maxDimension: 1920, quality: 0.84, rasterOnly: true } : undefined)} />
+    <input ref={inputRef} hidden type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon" onChange={(event) => onChoose(field, event.currentTarget, field === "loginBackgroundData" ? { maxDimension: 1920, quality: 0.84 } : undefined)} />
   </div>
     {status?.status === "processing" && <small className="brandingUploadStatus" role="status">Processing image…</small>}
     {status?.status === "error" && <small className="brandingUploadStatus brandingUploadError" role="alert">{status.message}</small>}
@@ -96,7 +95,7 @@ function BrandingFields({ draft, setValue, uploads, refs, chooseImage, resetImag
     <label className="span2 loginTransparencySetting">Login panel transparency <span>{Math.max(0, Math.min(70, Number(draft.loginPanelTransparency ?? 18)))}%</span><input type="range" min="0" max="70" step="1" value={Math.max(0, Math.min(70, Number(draft.loginPanelTransparency ?? 18)))} onChange={(e) => setValue("branding", "loginPanelTransparency", Number(e.target.value))} /><small>0% is solid white. Higher values reveal more of the login background while keeping the form readable.</small></label>
     <label className="span2">Google Play Store URL<input type="url" value={draft.googlePlayUrl || ""} onChange={(e) => setValue("branding", "googlePlayUrl", e.target.value)} placeholder="https://play.google.com/store/apps/details?id=..." /></label>
     <label>Apple App Store URL<input type="url" value={draft.appStoreUrl || ""} onChange={(e) => setValue("branding", "appStoreUrl", e.target.value)} placeholder="https://apps.apple.com/app/..." /></label>
-    <label>WhatsApp number<input type="tel" value={draft.whatsappNumber || ""} onChange={(e) => setValue("branding", "whatsappNumber", e.target.value)} placeholder="+974 5555 5555" /><small>Used by the WhatsApp button on both login pages. Include the country code.</small></label>
+    <p className="span2 settingsHelp">Set the email address, phone and WhatsApp number that appear as support icons on both sign-in pages.</p>
     <ImageSetting label="Default Favicon" field="faviconData" value={draft.faviconData} fallback="No favicon selected" compact inputRef={refs.favicon} status={uploads.faviconData} onChoose={chooseImage} onReset={resetImage} />
     <div className="span2 hintBox">New company portals use this default logo and favicon. A Company Admin can override only its own company logo.</div>
   </div>;
@@ -118,8 +117,6 @@ function TrackingFields({ draft, setValue }) {
 
 function GeneralFields({ draft, setValue }) {
   return <div className="settingsForm">
-    <label>Support Email<input value={draft.supportEmail || ""} onChange={(e) => setValue("general", "supportEmail", e.target.value)} /></label>
-    <label>Support Phone<input value={draft.supportPhone || ""} onChange={(e) => setValue("general", "supportPhone", e.target.value)} /></label>
     <label>Timezone<input value={draft.timezone || ""} onChange={(e) => setValue("general", "timezone", e.target.value)} /></label>
     <label>Date format<select value={draft.dateFormat || "DD-MM-YYYY"} onChange={(e) => setValue("general", "dateFormat", e.target.value)}><option>DD-MM-YYYY</option><option>MM-DD-YYYY</option><option>YYYY-MM-DD</option></select></label>
     <label>Time format<select value={draft.timeFormat || "24h"} onChange={(e) => setValue("general", "timeFormat", e.target.value)}><option value="12h">12-hour with AM/PM</option><option value="24h">24-hour</option></select></label>
@@ -129,6 +126,15 @@ function GeneralFields({ draft, setValue }) {
     <label>Altitude unit<select value={draft.altitudeUnit || "m"} onChange={(e) => setValue("general", "altitudeUnit", e.target.value)}><option>m</option><option>ft</option></select></label>
     <label>Distance decimals<select value={draft.distanceDecimals ?? 1} onChange={(e) => setValue("general", "distanceDecimals", Number(e.target.value))}><option value="0">0 (2 km)</option><option value="1">1 (2.5 km)</option><option value="2">2 (2.50 km)</option></select></label>
     <label>Language<select value={draft.language || "English"} onChange={(e) => setValue("general", "language", e.target.value)}><option>English</option><option>Arabic</option></select></label>
+  </div>;
+}
+
+function LoginContactFields({ draft, setValue }) {
+  return <div className="settingsForm">
+    <label>Email support<input type="email" value={draft.supportEmail || ""} onChange={(e) => setValue("loginContacts", "supportEmail", e.target.value)} placeholder="support@masar.qa" /><small>Opens a new email when someone selects the mail icon.</small></label>
+    <label>Phone / mobile number<input type="tel" value={draft.supportPhone || ""} onChange={(e) => setValue("loginContacts", "supportPhone", e.target.value)} placeholder="+974 5555 5555" /><small>Use the international country code for the call icon.</small></label>
+    <label>WhatsApp number<input type="tel" value={draft.whatsappNumber || ""} onChange={(e) => setValue("loginContacts", "whatsappNumber", e.target.value)} placeholder="+974 5555 5555" /><small>Use the international country code. This can differ from the phone number.</small></label>
+    <p className="span2 settingsHelp">These saved contacts are used by both the Super Admin and Company Admin login pages. Leave a field empty to disable that contact link.</p>
   </div>;
 }
 
@@ -238,7 +244,7 @@ export default function MainServerSettingsPage({ settings, saveSettings, verifyB
       const saved = await saveSettings(category, patch, category === "branding" ? { verify: verifyBranding } : undefined);
       if (category === "branding") applyBranding(saved);
       SETTINGS_SECTION_FIELDS[category].forEach((key) => changedFields.current.delete(key));
-      const labels = { branding: "Global branding was saved. Public login branding was verified.", tracking: "Server and tracking settings were saved.", general: "General settings were saved.", maps: "Maps and geocoding settings were saved.", security: "Notification, retention and security settings were saved.", deployment: "Deployment notes were saved." };
+      const labels = { branding: "Global branding was saved. Public login branding was verified.", loginContacts: "Login support contacts were saved.", tracking: "Server and tracking settings were saved.", general: "General settings were saved.", maps: "Maps and geocoding settings were saved.", security: "Notification, retention and security settings were saved.", deployment: "Deployment notes were saved." };
       setFeedback((current) => ({ ...current, [category]: { type: "success", message: labels[category] } }));
     } catch (error) {
       setFeedback((current) => ({ ...current, [category]: { type: "error", message: error.message || "This section was not saved." } }));
@@ -253,6 +259,7 @@ export default function MainServerSettingsPage({ settings, saveSettings, verifyB
     <div className="settingsColumns">
       <div className="settingsColumn">
         <SettingsPanel title="Global Branding" {...panelProps("branding")}><BrandingFields draft={draft} setValue={setValue} uploads={uploads} refs={refs} chooseImage={chooseImage} resetImage={resetImage} /></SettingsPanel>
+        <SettingsPanel title="Login Contact Links" {...panelProps("loginContacts")}><LoginContactFields draft={draft} setValue={setValue} /></SettingsPanel>
         <SettingsPanel title="General" {...panelProps("general")}><GeneralFields draft={draft} setValue={setValue} /></SettingsPanel>
         <SettingsPanel title="Notifications, Retention & Security" {...panelProps("security")}><SecurityFields draft={draft} setValue={setValue} /></SettingsPanel>
       </div>

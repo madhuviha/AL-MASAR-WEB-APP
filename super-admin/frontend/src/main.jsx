@@ -6,5 +6,6 @@ import AppErrorBoundary from '../../../company-admin/frontend/src/AppErrorBounda
 import '../../../company-admin/frontend/src/fleet-design.css';
 import './styles.css';
 import '../../../company-admin/frontend/src/modern-login.css';
+import '../../../company-admin/frontend/src/login-page-final.css';
 
 createRoot(document.getElementById('root')).render(<AppErrorBoundary portal="super-admin"><App/><LoadingStatus/></AppErrorBoundary>);
