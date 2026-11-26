@@ -2,11 +2,11 @@ import React,{useEffect,useState} from 'react';
 import {TileLayer,useMap} from 'react-leaflet';
 import {createPortal} from 'react-dom';
 import L from 'leaflet';
-import {authToken} from './api';
+import {authHeaders} from './api';
 let mapConfigLoad;
 let googleLoad;
 export function loadMapConfig(){
- if(!mapConfigLoad)mapConfigLoad=fetch('/inviha-api/api/map-config',{headers:{Authorization:'Bearer '+authToken()}}).then(async response=>{if(!response.ok)throw Error('Map settings unavailable. Refresh after deployment.');return response.json()}).catch(error=>{mapConfigLoad=null;throw error});
+ if(!mapConfigLoad)mapConfigLoad=fetch('/inviha-api/api/map-config',{credentials:'same-origin',headers:authHeaders()}).then(async response=>{if(!response.ok)throw Error('Map settings unavailable. Refresh after deployment.');return response.json()}).catch(error=>{mapConfigLoad=null;throw error});
  return mapConfigLoad;
 }
 export function useMapConfig(){

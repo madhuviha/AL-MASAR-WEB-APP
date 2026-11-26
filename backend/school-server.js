@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import pg from 'pg';
 import {initializeParentBus} from './parent-bus.mjs';
-import {boundedInteger,consumeLoginAttempt,LOGIN_ATTEMPT_LIMIT_MESSAGE,logLoginFailure,parseAllowedOrigins,sessionDays} from './security-controls.mjs';
+import {boundedInteger,clearSessionCookie,consumeLoginAttempt,createLoginLimiter,isWebClient,LOGIN_ATTEMPT_LIMIT_MESSAGE,LOGIN_FAILURE_LIMIT_MESSAGE,LOGIN_IP_LIMIT_MESSAGE,LOGIN_IP_WINDOW_MS,logLoginFailure,MAX_LOGIN_ATTEMPTS_PER_IP,originAllowedForApiRequest,originAllowedForCookieRequest,parseAllowedOrigins,redactSensitiveData,requestClient,sessionDays,sessionLifetimeMs,sessionTokenFromRequest,setSessionCookie,usesCookieSession,validateProductionOrigins} from './security-controls.mjs';
 
 dotenv.config();
 const {Pool}=pg;
@@ -14,19 +14,37 @@ const pool=new Pool({connectionString:process.env.DATABASE_URL,max:boundedIntege
 const livePool=process.env.TRACCAR_DATABASE_URL?new Pool({connectionString:process.env.TRACCAR_DATABASE_URL,max:boundedInteger(process.env.SCHOOL_TRACKER_DB_POOL_MAX,4,1,50),idleTimeoutMillis:30000,connectionTimeoutMillis:4000}):null;
 const PORT=boundedInteger(process.env.SCHOOL_API_PORT,3002,1,65535);
 const SESSION_DAYS=sessionDays(process.env.SCHOOL_SESSION_DAYS);
+const loginFailureLimiter=createLoginLimiter();
 const tokenHash=token=>crypto.createHash('sha256').update(String(token||'')).digest('hex');
 const clean=value=>String(value??'').trim();
 const parseAttrs=value=>{if(value&&typeof value==='object')return value;try{return JSON.parse(value||'{}')}catch{return {}}};
 const hashPassword=(password,salt=crypto.randomBytes(16).toString('hex'))=>`${salt}:${crypto.scryptSync(String(password),salt,64).toString('hex')}`;
 const verifyPassword=(password,stored)=>{try{const [salt,hash]=String(stored||'').split(':');if(!salt||!hash)return false;return crypto.timingSafeEqual(crypto.scryptSync(String(password),salt,64),Buffer.from(hash,'hex'))}catch{return false}};
 const schoolKeys=new Set(['schoolBuses','schoolBranches','schoolChildren','schoolParents','schoolScans','schoolRoutes','drivers','schoolAttenders','schoolCoordinators','schoolRfidCards','schoolRfidReaders','schoolSettings','companyProfile','companyPreferences','headerBanner']);
-const origins=parseAllowedOrigins(process.env.SCHOOL_ALLOWED_ORIGINS,'https://trackschoolbus.masar.qa,https://track.almasar.qa,http://localhost:5173,http://localhost:5177,http://localhost:5178,http://127.0.0.1:5173,http://127.0.0.1:5177,http://127.0.0.1:5178');
-if(String(process.env.SCHOOL_ALLOWED_ORIGINS||'').split(',').some(origin=>origin.trim()==='*'))console.warn('Ignoring wildcard SCHOOL_ALLOWED_ORIGINS; configure explicit portal origins.');
+const origins=parseAllowedOrigins(process.env.SCHOOL_ALLOWED_ORIGINS,'https://trackschoolbus.masar.qa,https://track.almasar.qa,http://localhost:5173,http://localhost:4173,http://localhost:5177,http://localhost:5178,http://127.0.0.1:5173,http://127.0.0.1:4173,http://127.0.0.1:5177,http://127.0.0.1:5178');
+if(process.env.NODE_ENV==='production')validateProductionOrigins(process.env.SCHOOL_ALLOWED_ORIGINS,origins,'SCHOOL_ALLOWED_ORIGINS');
+else if(String(process.env.SCHOOL_ALLOWED_ORIGINS||'').split(',').some(origin=>origin.trim()==='*'))console.warn('Ignoring wildcard SCHOOL_ALLOWED_ORIGINS; configure explicit portal origins.');
 app.disable('x-powered-by');
 app.set('trust proxy','loopback');
-app.use(cors({origin(origin,callback){callback(null,!origin||origins.has(origin))},credentials:false}));
+app.use(cors({origin(origin,callback){callback(null,!origin||origins.has(origin))},credentials:true,preflightContinue:true}));
 app.use(express.json({limit:'8mb'}));
 app.use((req,res,next)=>{res.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'strict-origin-when-cross-origin','Permissions-Policy':'camera=(), microphone=(), geolocation=(self)',"Content-Security-Policy":"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});if(req.path.startsWith('/api/'))res.set({'Cache-Control':'no-store','Pragma':'no-cache'});if(req.secure&&(process.env.NODE_ENV==='production'||process.env.ENABLE_HSTS==='true'))res.set('Strict-Transport-Security','max-age=31536000');next()});
+app.use((req,res,next)=>{
+  if(!req.path.startsWith('/api/'))return next();
+  const sendJson=res.json.bind(res);
+  res.json=body=>{
+    const safe=redactSensitiveData(body);
+    if(!usesCookieSession(req)&&req.path==='/api/school/auth/login'&&typeof body?.token==='string')safe.token=body.token;
+    return sendJson(safe);
+  };
+  next();
+});
+app.use((req,res,next)=>{
+  if(!req.path.startsWith('/api/'))return next();
+  if(!originAllowedForApiRequest(req,origins)||!originAllowedForCookieRequest(req,origins))return res.status(403).json({error:'origin_not_allowed'});
+  if(req.method==='OPTIONS')return res.status(204).end();
+  return next();
+});
 
 const trackingApi=axios.create({baseURL:process.env.TRACCAR_BASE_URL||'http://127.0.0.1:8082',auth:{username:process.env.TRACCAR_ADMIN_EMAIL||'',password:process.env.TRACCAR_ADMIN_PASSWORD||''},timeout:10000,headers:{'Content-Type':'application/json'}});
 let liveCache=null,liveCacheAt=0,livePending=null;
@@ -53,7 +71,7 @@ async function readLiveSnapshots(){const now=Date.now();if(liveCache&&now-liveCa
 
 async function schoolAuth(req,res,next){
   try{
-    const token=String(req.headers.authorization||'').replace(/^Bearer\s+/,'').trim();if(!token)return res.status(401).json({error:'not_authenticated'});
+    const token=sessionTokenFromRequest(req,'school');if(!token)return res.status(401).json({error:'not_authenticated'});
     const row=(await pool.query(`SELECT u.id,u.company_id,u.name,u.email,u.role,u.status,u.metadata,s.expires_at,
       sa.display_name AS school_name,sa.status AS school_status,c.status AS company_status
       FROM school_portal_sessions s JOIN auth_users u ON u.id=s.user_id
@@ -65,14 +83,14 @@ async function schoolAuth(req,res,next){
     const isSchoolAdmin=row.role==='school_admin'&&row.metadata?.schoolAdmin===true;
     const isSchoolParent=row.role==='parent'&&row.metadata?.schoolParent===true;
     if(!isSchoolAdmin&&!isSchoolParent)return res.status(403).json({error:'school_role_required'});
-    req.schoolToken=token;req.user=row;next();
+    req.schoolToken=token;req.authToken=token;req.user=row;next();
   }catch(error){console.error('School authentication error:',error.message);res.status(500).json({error:'school_auth_failed'})}
 }
 const requireSchoolAdmin=(req,res,next)=>req.user?.role==='school_admin'&&req.user?.metadata?.schoolAdmin===true?next():res.status(403).json({error:'school_administrator_required'});
 
 async function fleetSuper(req,res,next){
   try{
-    const token=String(req.headers.authorization||'').replace(/^Bearer\s+/,'').trim();if(!token)return res.status(401).json({error:'not_authenticated'});
+    const token=sessionTokenFromRequest(req,'admin');if(!token)return res.status(401).json({error:'not_authenticated'});
     const user=(await pool.query(`SELECT u.id,u.role,u.status FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id
       WHERE s.token_hash=$1 AND s.expires_at>NOW() AND COALESCE(s.active_app_role,'fleet')='fleet'`,[tokenHash(token)])).rows[0];
     if(!user||user.role!=='super_admin'||user.status!=='active')return res.status(403).json({error:'super_admin_required'});
@@ -83,8 +101,12 @@ async function fleetSuper(req,res,next){
 app.get('/api/health',async(_req,res)=>{try{await pool.query('SELECT 1');res.json({ok:true,service:'masar-school-api',database:'connected'})}catch{res.status(503).json({ok:false,service:'masar-school-api',database:'unavailable'})}});
 
 app.post('/api/school/auth/login',async(req,res)=>{
-  const email=clean(req.body?.email).toLowerCase(),password=String(req.body?.password||'');
+  const rawEmail=clean(req.body?.email).normalize('NFKC'),email=rawEmail.toLowerCase(),password=String(req.body?.password||'');
   try{
+    if(!email||!email.includes('@')||rawEmail.length>254||password.length>1024)return res.status(400).json({error:'invalid_login_request'});
+    const ipAttempt=await consumeLoginAttempt(pool,`ip:${req.ip||req.socket?.remoteAddress||'unknown'}`,Date.now(),{windowMs:LOGIN_IP_WINDOW_MS,maxAttempts:MAX_LOGIN_ATTEMPTS_PER_IP});
+    if(!ipAttempt.allowed){logLoginFailure(req,email,'ip_rate_limited');res.set('Retry-After',String(ipAttempt.retryAfterSeconds));return res.status(429).json({error:'too_many_login_attempts',message:LOGIN_IP_LIMIT_MESSAGE})}
+    if(loginFailureLimiter.blocked(req,email)){res.set('Retry-After','900');return res.status(429).json({error:'too_many_login_attempts',message:LOGIN_FAILURE_LIMIT_MESSAGE})}
     const attempt=await consumeLoginAttempt(pool,email);
     if(!attempt.allowed){logLoginFailure(req,email,'rate_limited');res.set('Retry-After',String(attempt.retryAfterSeconds));return res.status(429).json({error:'too_many_login_attempts',message:LOGIN_ATTEMPT_LIMIT_MESSAGE})}
     const row=(await pool.query(`SELECT u.id,u.company_id,u.name,u.email,u.password_hash,u.role,u.status,u.metadata,
@@ -93,16 +115,21 @@ app.post('/api/school/auth/login',async(req,res)=>{
       WHERE lower(u.email)=lower($1) LIMIT 1`,[email])).rows[0];
     const allowedAdmin=row?.role==='school_admin'&&row?.metadata?.schoolAdmin===true;
     const allowedParent=row?.role==='parent'&&row?.metadata?.schoolParent===true;
-    if(!row||!verifyPassword(password,row.password_hash)||(!allowedAdmin&&!allowedParent)){logLoginFailure(req,email,'invalid_credentials');return res.status(401).json({error:'invalid_credentials'})}
+    if(!row||!verifyPassword(password,row.password_hash)||(!allowedAdmin&&!allowedParent)){loginFailureLimiter.recordFailure(req,email);logLoginFailure(req,email,'invalid_credentials');return res.status(401).json({error:'invalid_credentials'})}
     if(row.status!=='active'||row.school_status!=='active'||row.company_status!=='active'){return res.status(403).json({error:'school_account_disabled'})}
-    const token=crypto.randomBytes(32).toString('hex'),expiresAt=new Date(Date.now()+SESSION_DAYS*86400000);
+    loginFailureLimiter.clearFailures(req,email);
+    const lifetime=sessionLifetimeMs(req,req.body?.rememberMe===true,{days:SESSION_DAYS,hours:boundedInteger(process.env.WEB_SESSION_HOURS,12,1,168)});
+    const token=crypto.randomBytes(32).toString('hex'),expiresAt=new Date(Date.now()+lifetime);
     await pool.query('INSERT INTO school_portal_sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)',[tokenHash(token),row.id,expiresAt]);
     const {password_hash:_hidden,...user}=row;
-    res.set('Cache-Control','no-store').json({token,expiresAt:expiresAt.toISOString(),user:{id:Number(user.id),companyId:Number(user.company_id),name:user.name,email:user.email,role:user.role,status:user.status,metadata:user.metadata||{},schoolName:user.school_name}});
+    if(isWebClient(req))setSessionCookie(req,res,token,{client:requestClient(req),maxAgeSeconds:req.body?.rememberMe===true?Math.ceil(lifetime/1000):undefined});
+    const response={expiresAt:expiresAt.toISOString(),user:{id:Number(user.id),companyId:Number(user.company_id),name:user.name,email:user.email,role:user.role,status:user.status,metadata:user.metadata||{},schoolName:user.school_name}};
+    if(!isWebClient(req))response.token=token;
+    res.set('Cache-Control','no-store').json(response);
   }catch(error){console.error('School login failed:',error.message);res.status(500).json({error:'school_login_failed'})}
 });
 app.get('/api/school/auth/me',schoolAuth,(req,res)=>res.json({id:Number(req.user.id),companyId:Number(req.user.company_id),name:req.user.name,email:req.user.email,role:req.user.role,status:req.user.status,metadata:req.user.metadata||{},schoolName:req.user.school_name}));
-app.post('/api/school/auth/logout',schoolAuth,async(req,res)=>{try{await pool.query('DELETE FROM school_portal_sessions WHERE token_hash=$1',[tokenHash(req.schoolToken)])}catch{}res.json({ok:true})});
+app.post('/api/school/auth/logout',schoolAuth,async(req,res)=>{try{await pool.query('DELETE FROM school_portal_sessions WHERE token_hash=$1',[tokenHash(req.schoolToken)])}catch{}if(isWebClient(req)||req.authSource==='cookie')clearSessionCookie(req,res);res.json({ok:true})});
 
 app.get('/api/school/admin/accounts',fleetSuper,async(_req,res)=>{
   try{const rows=(await pool.query(`SELECT sa.company_id AS "companyId",sa.display_name AS "schoolName",sa.status,
@@ -124,8 +151,17 @@ app.post('/api/school/admin/accounts',fleetSuper,async(req,res)=>{
       VALUES($1,$2,$3,$4,'school_admin','active',$5::jsonb) RETURNING id,name,email,role,status`,[companyId,adminName,email,hashPassword(password),JSON.stringify({schoolAdmin:true})])).rows[0];
     const account=(await client.query(`INSERT INTO school_accounts(company_id,display_name,status,admin_user_id,created_by)
       VALUES($1,$2,'active',$3,$4) RETURNING company_id AS "companyId",display_name AS "schoolName",status,created_at AS "createdAt"`,[companyId,schoolName,user.id,req.superAdmin.id])).rows[0];
+    await client.query("INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'school_admin_account_created','school_account',$3,$4::jsonb)",[companyId,req.superAdmin.id,String(companyId),JSON.stringify({adminUserId:Number(user.id),accountRole:'school_admin'})]);
     await client.query('COMMIT');res.status(201).json({...account,adminUserId:Number(user.id),adminName:user.name,adminEmail:user.email});
-  }catch(error){try{await client.query('ROLLBACK')}catch{};console.error('School account creation failed:',error.message);res.status(error.code==='23505'?409:500).json({error:error.code==='23505'?'email_already_registered':'school_account_create_failed'})}finally{client.release()}
+  }catch(error){
+    try{await client.query('ROLLBACK')}catch{}
+    console.error('School account creation failed:',JSON.stringify({code:String(error?.code||''),table:String(error?.table||''),constraint:String(error?.constraint||'')}));
+    if(error.code==='23505')return res.status(409).json({error:'email_already_registered',message:'That email already has an account. Use a separate School Bus administrator email.'});
+    if(['23514','42P01','42703'].includes(String(error?.code||'')))return res.status(503).json({error:'school_schema_upgrade_required',message:'The School Bus account database needs its schema update. Ask the administrator to apply the School Bus migration.'});
+    if(error.code==='42501')return res.status(503).json({error:'school_database_permissions',message:'The School Bus service cannot write account records. Ask the administrator to check its database permissions.'});
+    if(error.code==='23503')return res.status(409).json({error:'school_account_reference_invalid',message:'The selected company or administrator record is no longer available. Refresh and try again.'});
+    res.status(500).json({error:'school_account_create_failed',message:'The School Bus administrator could not be created. Check the School Bus service log for its database error code.'});
+  }finally{client.release()}
 });
 
 app.get('/api/school/company/me',schoolAuth,async(req,res)=>{

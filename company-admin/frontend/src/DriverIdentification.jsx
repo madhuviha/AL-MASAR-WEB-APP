@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {api,authToken} from './api';
+import {api,authHeaders} from './api';
 export const currentDriverName=v=>v?.currentDriver?.name||v?.current_driver?.name||'—';
 export function DriverIdentifiers({value,onChange}){
  const rows=value.identifiers||((value.rfid&&value.rfid===value.ibutton)?[{type:'DRIVER_ID',identifier:value.rfid}]:[{type:'RFID',identifier:value.rfid||''},{type:'IBUTTON',identifier:value.ibutton||''}]);
@@ -21,7 +21,7 @@ export function useDriverUpdates(enabled){
  useEffect(()=>{
   if(!enabled)return;const controller=new AbortController();let retry;
   async function connect(){try{
-   const r=await fetch('/inviha-api/api/driver-identification/stream',{headers:{Authorization:'Bearer '+authToken()},signal:controller.signal});
+   const r=await fetch('/inviha-api/api/driver-identification/stream',{credentials:'same-origin',headers:authHeaders(),signal:controller.signal});
    if(!r.ok)throw Error('Stream unavailable');
    const reader=r.body.getReader(),decoder=new TextDecoder();let pending='';
    while(!controller.signal.aborted){const {done,value}=await reader.read();if(done)break;pending+=decoder.decode(value,{stream:true});let end;

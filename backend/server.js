@@ -24,7 +24,8 @@ import {normalizeMapAccess,availableMaps,defaultBaseMap,mapAccessDefinitions} fr
 import {normalizeCommandRequest,companyUserCanAccessVehicle,commandPermissionGranted,immobilizerPermissionGranted,CommandValidationError} from './command-policy.mjs';
 import {preparePlatformSettingsPatch,PlatformSettingsValidationError,redactPlatformSettings} from './platform-settings.mjs';
 import {prepareCompanySettingsPatch,prepareLegacyCompanySettingsPatch,CompanySettingsValidationError} from './company-settings.mjs';
-import {boundedInteger,consumeLoginAttempt,LOGIN_ATTEMPT_LIMIT_MESSAGE,logLoginFailure,parseAllowedOrigins,pruneLoginAttemptWindows,redactSensitiveData,sessionDays} from './security-controls.mjs';
+import {boundedInteger,clearSessionCookie,consumeLoginAttempt,createLoginLimiter,isWebClient,LOGIN_ATTEMPT_LIMIT_MESSAGE,LOGIN_FAILURE_LIMIT_MESSAGE,LOGIN_IP_LIMIT_MESSAGE,LOGIN_IP_WINDOW_MS,logLoginFailure,MAX_LOGIN_ATTEMPTS_PER_IP,originAllowedForApiRequest,originAllowedForCookieRequest,parseAllowedOrigins,pruneLoginAttemptWindows,redactSensitiveData,redactSensitiveText,requestClient,sessionDays,sessionLifetimeMs,sessionTokenFromRequest,setSessionCookie,usesCookieSession,validateProductionOrigins} from './security-controls.mjs';
+import {createRecoveryCodes,createTotpSetupKey,decryptTotpSecret,encryptTotpSecret,parseMfaEncryptionKey,recoveryCodeHash,verifyTotpCode} from './mfa-totp.mjs';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -39,10 +40,22 @@ const { Pool } = pg;
 const app = express();
 app.set('trust proxy','loopback');
 if(typeof app.disable==='function')app.disable('x-powered-by');
-const allowedOrigins=parseAllowedOrigins(process.env.ALLOWED_ORIGINS,'https://track.almasar.qa,https://admin.almasar.qa,https://track.inviha.com,https://admin.inviha.com,https://vehicletracking.effy.qa,http://localhost:5173,http://localhost:4173,http://localhost:5177,http://localhost:5178');
-if(String(process.env.ALLOWED_ORIGINS||'').split(',').some(origin=>origin.trim()==='*'))console.warn('Ignoring wildcard ALLOWED_ORIGINS; configure explicit portal origins.');
-app.use(cors({origin(origin,callback){callback(null,!origin||allowedOrigins.has(origin))},credentials:false}));
+const allowedOrigins=parseAllowedOrigins(process.env.ALLOWED_ORIGINS,'https://track.almasar.qa,https://admin.almasar.qa,https://track.inviha.com,https://admin.inviha.com,https://vehicletracking.effy.qa,http://localhost:5173,http://localhost:4173,http://localhost:5177,http://localhost:5178,http://127.0.0.1:5173,http://127.0.0.1:4173,http://127.0.0.1:5177,http://127.0.0.1:5178');
+if(process.env.NODE_ENV==='production')validateProductionOrigins(process.env.ALLOWED_ORIGINS,allowedOrigins,'ALLOWED_ORIGINS');
+else if(String(process.env.ALLOWED_ORIGINS||'').split(',').some(origin=>origin.trim()==='*'))console.warn('Ignoring wildcard ALLOWED_ORIGINS; configure explicit portal origins.');
+app.use(cors({origin(origin,callback){callback(null,!origin||allowedOrigins.has(origin))},credentials:true,preflightContinue:true}));
 app.use(express.json({limit:'8mb',strict:true}));
+app.post('/api/security/csp-report',express.text({type:'application/csp-report',limit:'16kb'}),(req,res)=>{
+  if(String(req.get('content-type')||'').split(';')[0].trim().toLowerCase()!=='application/csp-report')return res.status(415).end();
+  if(Number(req.get('content-length')||0)>16*1024)return res.status(413).end();
+  let payload=req.body;
+  if(typeof payload==='string'){try{payload=JSON.parse(payload)}catch{return res.status(400).end()}}
+  const report=payload?.['csp-report']||(Array.isArray(payload)?payload[0]?.body:payload)||{};
+  const originOf=value=>{try{return new URL(String(value||'')).origin}catch{return ['inline','eval','self','data','blob'].includes(String(value||'').toLowerCase())?String(value).toLowerCase():null}};
+  const directive=String(report['violated-directive']||report.effectiveDirective||'').replace(/[^A-Za-z0-9 _-]/g,'').slice(0,80);
+  if(directive)console.warn(JSON.stringify({event:'csp.report',documentOrigin:originOf(report['document-uri']||report.documentURL),blockedOrigin:originOf(report['blocked-uri']||report.blockedURL),directive,disposition:String(report.disposition||'report').slice(0,16),at:new Date().toISOString()}));
+  return res.status(204).end();
+});
 app.use((req,res,next)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('X-Frame-Options','DENY');
@@ -52,6 +65,25 @@ app.use((req,res,next)=>{
   if(req.path.startsWith('/api/')){res.setHeader('Cache-Control','no-store');res.setHeader('Pragma','no-cache')}
   if(req.secure&&(process.env.NODE_ENV==='production'||process.env.ENABLE_HSTS==='true'))res.setHeader('Strict-Transport-Security','max-age=31536000');
   next();
+});
+app.use((req,res,next)=>{
+  if(!req.path.startsWith('/api/'))return next();
+  const sendJson=res.json.bind(res);
+  res.json=body=>{
+    const safe=redactSensitiveData(body);
+    const bearerCredentialRoute=['/api/auth/login','/api/auth/switch-role'].includes(req.path);
+    const legacySupportRoute=/^\/api\/(?:companies\/\d+|users\/\d+)\/support-login$/.test(req.path);
+    if(!usesCookieSession(req)&&(bearerCredentialRoute||legacySupportRoute)&&typeof body?.token==='string')safe.token=body.token;
+    return sendJson(safe);
+  };
+  next();
+});
+app.use((req,res,next)=>{
+  if(!req.path.startsWith('/api/'))return next();
+  if(req.path==='/api/security/csp-report'&&String(req.headers.origin||'')==='null')return next();
+  if(!originAllowedForApiRequest(req,allowedOrigins)||!originAllowedForCookieRequest(req,allowedOrigins))return res.status(403).json({error:'origin_not_allowed'});
+  if(req.method==='OPTIONS')return res.status(204).end();
+  return next();
 });
 app.get('/api/public/branding',async(_req,res)=>{try{const r=await pool.query('SELECT data FROM platform_state WHERE id=1');const s=r.rows[0]?.data?.settings||{},hasBackground=/^data:image\/(?:png|jpeg|webp);base64,/i.test(String(s.loginBackgroundData||'')),transparency=Math.max(0,Math.min(70,Number(s.loginPanelTransparency??18)));res.set('Cache-Control','no-store').json({logoData:s.loginLogoData||s.brandLogoData||'',collapsedLogoData:s.collapsedLogoData||'',faviconData:s.faviconData||'',loginBackgroundData:'',loginBackgroundUrl:hasBackground?'/inviha-api/api/public/login-background':'',loginPanelTransparency:transparency,templateColor:s.templateColor||'#0aa65f',loginTextColor:s.loginTextColor||'#0b2748',loginBackgroundColor:s.loginBackgroundColor||'#f4f8fb',loginPanelColor:s.loginPanelColor||'#ffffff',welcomeText:s.welcomeText||'Welcome to MASAR TRACK',bottomText:s.bottomText||'2026 © INVIHA Technologies',portalTitle:s.portalTitle||'Fleet Management',companyBrowserTitle:s.companyBrowserTitle||'Fleet Management',googlePlayUrl:s.googlePlayUrl||'',appStoreUrl:s.appStoreUrl||'',supportEmail:s.supportEmail||'',supportPhone:s.supportPhone||'',whatsappNumber:s.whatsappNumber||'',timezone:s.timezone||'Asia/Qatar',dateFormat:s.dateFormat||'DD-MM-YYYY',timeFormat:s.timeFormat||'24h',captchaProvider:s.captchaProvider&&s.captchaProvider!=='None'&&s.captchaSiteKey&&s.captchaSecretKey?s.captchaProvider:'None',captchaSiteKey:s.captchaProvider&&s.captchaProvider!=='None'&&s.captchaSecretKey?String(s.captchaSiteKey||''):''})}catch{res.status(503).json({error:'branding_unavailable'})}});
 app.get('/api/public/login-background',async(req,res)=>{try{const r=await pool.query('SELECT data FROM platform_state WHERE id=1'),value=String(r.rows[0]?.data?.settings?.loginBackgroundData||''),match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(value);if(!match)return res.status(204).set('Cache-Control','no-store').end();const body=Buffer.from(match[2].replace(/\s/g,''),'base64'),etag='"'+crypto.createHash('sha256').update(body).digest('hex')+'"';res.set({'Cache-Control':'public,max-age=0,must-revalidate','ETag':etag,'Content-Type':match[1],'X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin'});if(req.headers['if-none-match']===etag)return res.status(304).end();res.send(body)}catch{res.status(503).set('Cache-Control','no-store').end()}});
@@ -80,6 +112,7 @@ app.use((req,res,next)=>{
 });
 
 const SESSION_DAYS = sessionDays(process.env.SESSION_DAYS);
+const loginFailureLimiter=createLoginLimiter();
 const TRACKER_PORT = boundedInteger(process.env.TRACKER_PORT,5023,1,65535);
 const tokenHash = token => crypto.createHash('sha256').update(String(token||'')).digest('hex');
 const hashPassword = (password, salt=crypto.randomBytes(16).toString('hex')) => {
@@ -89,14 +122,74 @@ const verifyPassword = (password, stored) => {
   try { const [salt,hash]=String(stored||'').split(':'); if(!salt||!hash)return false; const test=crypto.scryptSync(String(password),salt,64); return crypto.timingSafeEqual(test,Buffer.from(hash,'hex')); } catch { return false; }
 };
 async function authUserFromReq(req){
-  const h=String(req.headers.authorization||''); const token=h.startsWith('Bearer ')?h.slice(7).trim():''; if(!token)return null;
-  const {rows}=await pool.query(`SELECT u.id,u.company_id,u.name,u.email,u.role AS account_role,u.status,u.metadata,s.active_app_role,s.expires_at,
+  const token=sessionTokenFromRequest(req); if(!token)return null;
+  const {rows}=await pool.query(`SELECT u.id,u.company_id,u.name,u.email,u.role AS account_role,u.status,u.metadata,u.mfa_totp_enabled_at,s.active_app_role,s.expires_at,
     COALESCE((SELECT array_agg(r.app_role ORDER BY r.app_role) FROM auth_user_app_roles r WHERE r.user_id=u.id),ARRAY[]::text[]) AS available_roles
     FROM auth_sessions s JOIN auth_users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>NOW()`,[tokenHash(token)]);
   return scopeUserToSession(rows[0]);
 }
-async function requireAuth(req,res,next){ try{const u=await authUserFromReq(req);if(!u)return res.status(401).json({error:'not_authenticated'});if(String(u.status).toLowerCase()!=='active')return res.status(403).json({error:'account_disabled'});if(u.company_id){const c=await pool.query('SELECT status FROM companies WHERE id=$1',[u.company_id]);if(!c.rows[0]||String(c.rows[0].status).toLowerCase()!=='active')return res.status(403).json({error:'company_disabled'});}req.user=u;next()}catch(e){console.error(e);res.status(500).json({error:'auth_failed'})} }
+async function requireAuth(req,res,next){ try{const u=await authUserFromReq(req);if(!u)return res.status(401).json({error:'not_authenticated'});if(String(u.status).toLowerCase()!=='active')return res.status(403).json({error:'account_disabled'});if(u.account_role==='super_admin'&&superAdminMfaRequired()&&!u.mfa_totp_enabled_at){await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1',[tokenHash(req.authToken||'')]);if(req.authSource==='cookie')clearSessionCookie(req,res);return res.status(401).json({error:'super_admin_mfa_setup_required',message:'Complete authenticator setup before using the Super Admin portal.'})}if(u.company_id){const c=await pool.query('SELECT status FROM companies WHERE id=$1',[u.company_id]);if(!c.rows[0]||String(c.rows[0].status).toLowerCase()!=='active')return res.status(403).json({error:'company_disabled'});}req.user=u;next()}catch(e){console.error(e);res.status(500).json({error:'auth_failed'})} }
 const requireSuper=(req,res,next)=> req.user?.role==='super_admin'?next():res.status(403).json({error:'super_admin_required'});
+
+const MFA_CHALLENGE_MS=5*60*1000,MFA_MAX_ATTEMPTS=5,MFA_RATE_WINDOW_MS=15*60*1000,MFA_RATE_MAX_ATTEMPTS=8;
+const superAdminMfaRequired=()=>String(process.env.SUPER_ADMIN_MFA_REQUIRED||'false').trim().toLowerCase()==='true';
+const mfaChallengeHash=value=>crypto.createHash('sha256').update(String(value||'')).digest('hex');
+function mfaPortalOnly(req,res){if(usesCookieSession(req)&&requestClient(req)==='web-admin')return true;res.status(426).json({error:'super_admin_mfa_portal_required',message:'Update and use the Super Admin portal to sign in with an authenticator app.'});return false}
+async function createMfaChallenge(userId,type,rememberMe){
+  const challengeId=crypto.randomBytes(32).toString('base64url'),hash=mfaChallengeHash(challengeId);
+  await pool.query('DELETE FROM auth_mfa_challenges WHERE user_id=$1 OR expires_at<=NOW()',[userId]);
+  await pool.query('INSERT INTO auth_mfa_challenges(challenge_hash,user_id,challenge_type,remember_me,expires_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL \'5 minutes\')',[hash,userId,type,rememberMe===true]);
+  return challengeId;
+}
+async function lockedMfaChallenge(client,challengeId,type){
+  if(!/^[A-Za-z0-9_-]{32,128}$/.test(String(challengeId||'')))return null;
+  return (await client.query(`SELECT ch.challenge_hash,ch.user_id,ch.challenge_type,ch.attempt_count,ch.remember_me,ch.expires_at,
+      u.id,u.company_id,u.name,u.email,u.role,u.status,u.metadata,u.password_hash,u.mfa_totp_secret_enc,u.mfa_totp_enabled_at,
+      u.mfa_totp_pending_secret_enc,u.mfa_totp_pending_expires_at,u.mfa_totp_last_counter,u.mfa_recovery_codes
+    FROM auth_mfa_challenges ch JOIN auth_users u ON u.id=ch.user_id
+    WHERE ch.challenge_hash=$1 AND ch.challenge_type=$2 AND ch.expires_at>NOW() AND ch.attempt_count<$3
+    FOR UPDATE OF ch,u`,[mfaChallengeHash(challengeId),type,MFA_MAX_ATTEMPTS])).rows[0]||null;
+}
+async function rejectMfaAttempt(client,challenge){
+  const updated=await client.query('UPDATE auth_mfa_challenges SET attempt_count=attempt_count+1 WHERE challenge_hash=$1 RETURNING attempt_count',[challenge.challenge_hash]);
+  if(Number(updated.rows[0]?.attempt_count)>=MFA_MAX_ATTEMPTS){
+    await client.query('DELETE FROM auth_mfa_challenges WHERE challenge_hash=$1',[challenge.challenge_hash]);
+    if(challenge.challenge_type==='enroll')await client.query('UPDATE auth_users SET mfa_totp_pending_secret_enc=NULL,mfa_totp_pending_expires_at=NULL WHERE id=$1',[challenge.user_id]);
+  }
+}
+async function checkMfaRateLimit(client,req,res,challenge,method){
+  const identity=`mfa:${challenge.user_id}:${req.ip||req.socket?.remoteAddress||'unknown'}`;
+  const attempt=await consumeLoginAttempt(client,identity,Date.now(),{windowMs:MFA_RATE_WINDOW_MS,maxAttempts:MFA_RATE_MAX_ATTEMPTS});
+  if(attempt.allowed)return true;
+  if(attempt.attempts===MFA_RATE_MAX_ATTEMPTS+1)await client.query(
+    "INSERT INTO audit_events(user_id,action,entity_type,entity_id,detail) VALUES($1,'super_admin_mfa_rate_limited','auth_user',$2,$3::jsonb)",
+    [challenge.user_id,String(challenge.user_id),JSON.stringify({method,windowSeconds:MFA_RATE_WINDOW_MS/1000})]
+  );
+  await client.query('COMMIT');
+  res.set('Retry-After',String(attempt.retryAfterSeconds)).status(429).json({error:'mfa_rate_limited',message:'Too many authenticator attempts. Wait and try again.'});
+  return false;
+}
+async function auditMfaFailure(client,challenge,method){
+  await client.query("INSERT INTO audit_events(user_id,action,entity_type,entity_id,detail) VALUES($1,'super_admin_mfa_failed','auth_user',$2,$3::jsonb)",
+    [challenge.user_id,String(challenge.user_id),JSON.stringify({method,outcome:'invalid_code'})]);
+}
+async function createAuthenticatedSession(client,req,user,activeRole,rememberMe){
+  const lifetime=sessionLifetimeMs(req,rememberMe,{days:SESSION_DAYS,hours:boundedInteger(process.env.WEB_SESSION_HOURS,12,1,168)}),expires=new Date(Date.now()+lifetime),token=crypto.randomBytes(32).toString('hex');
+  await client.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at,active_app_role) VALUES($1,$2,$3,$4)',[tokenHash(token),user.id,expires,activeRole]);
+  const scoped=scopeUserToSession({...user,account_role:user.role,active_app_role:activeRole,available_roles:[activeRole]});
+  const response={...authRolePayload(scoped),expiresAt:expires.toISOString()};
+  if(!isWebClient(req))response.token=token;
+  return {token,lifetime,response,rememberMe:rememberMe===true};
+}
+function sendAuthenticatedSession(req,res,session){
+  if(isWebClient(req))setSessionCookie(req,res,session.token,{client:requestClient(req),maxAgeSeconds:session.rememberMe?Math.ceil(session.lifetime/1000):undefined});
+  res.set('Cache-Control','no-store');
+}
+function recoveryCodeMatches(code,hashes){
+  const candidate=Buffer.from(recoveryCodeHash(code),'hex');
+  const index=(Array.isArray(hashes)?hashes:[]).findIndex(value=>{try{return crypto.timingSafeEqual(candidate,Buffer.from(String(value),'hex'))}catch{return false}});
+  return index;
+}
 
 const retentionDays=value=>Math.min(3650,Math.max(1,Number(value)||30));
 const retentionBackupDir=()=>process.env.RETENTION_BACKUP_DIR||'/var/backups/inviha-retention';
@@ -171,14 +264,18 @@ app.get('/api/auth/setup-status', async (_req,res)=>{
   catch(e){console.error(e);res.status(500).json({error:'setup_status_failed'})}
 });
 app.post('/api/auth/setup-super-admin', async (req,res)=>{
-  const client=await pool.connect(); try{
-    const {rows}=await client.query("SELECT COUNT(*)::int AS n FROM auth_users WHERE role='super_admin'"); if(rows[0].n>0)return res.status(409).json({error:'super_admin_already_exists'});
-    const name=cleanString(req.body.name)||'Super Admin',email=cleanString(req.body.email).toLowerCase(),password=String(req.body.password||'');
-    if(!email||password.length<8)return res.status(400).json({error:'email_and_password_required'});
+  const name=cleanString(req.body.name)||'Super Admin',email=cleanString(req.body.email).toLowerCase(),password=String(req.body.password||'');
+  if(!email||password.length<8)return res.status(400).json({error:'email_and_password_required'});
+  const client=await pool.connect();try{
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('masar_super_admin_setup'))");
+    const {rows}=await client.query("SELECT COUNT(*)::int AS n FROM auth_users WHERE role='super_admin'");
+    if(rows[0].n>0){await client.query('ROLLBACK');return res.status(409).json({error:'super_admin_already_exists'})}
     const out=await client.query("INSERT INTO auth_users(name,email,password_hash,role,status) VALUES($1,$2,$3,'super_admin','active') RETURNING id,name,email,role,status",[name,email,hashPassword(password)]);
     await client.query("INSERT INTO auth_user_app_roles(user_id,app_role) VALUES($1,'fleet') ON CONFLICT DO NOTHING",[out.rows[0].id]);
-    res.status(201).json(out.rows[0]);
-  }catch(e){console.error(e);res.status(500).json({error:'setup_failed'})}finally{client.release()}
+    await client.query("INSERT INTO audit_events(user_id,action,entity_type,entity_id,detail) VALUES(NULL,'super_admin_created','auth_user',$1,$2::jsonb)",[String(out.rows[0].id),JSON.stringify({method:'initial_setup',grantedAppRoles:['fleet']})]);
+    await client.query('COMMIT');res.status(201).json(out.rows[0]);
+  }catch(e){try{await client.query('ROLLBACK')}catch{};console.error(e);res.status(500).json({error:'setup_failed'})}finally{client.release()}
 });
 async function verifyLoginCaptcha(token,remoteIp){
  const row=(await pool.query("SELECT COALESCE(data->'settings','{}'::jsonb) AS settings FROM platform_state WHERE id=1")).rows[0],settings=row?.settings||{},provider=String(settings.captchaProvider||'None'),secret=String(settings.captchaSecretKey||'').trim(),siteKey=String(settings.captchaSiteKey||'').trim();
@@ -190,36 +287,141 @@ async function verifyLoginCaptcha(token,remoteIp){
 }
 app.post('/api/auth/login', async (req,res)=>{
   try{
-    const email=cleanString(req.body?.email).toLowerCase(),password=String(req.body?.password||'');
+    const rawEmail=cleanString(req.body?.email).normalize('NFKC'),email=rawEmail.toLowerCase(),password=String(req.body?.password||'');
+    if(!email||!email.includes('@')||rawEmail.length>254||password.length>1024)return res.status(400).json({error:'invalid_login_request'});
+    const ipAttempt=await consumeLoginAttempt(pool,`ip:${req.ip||req.socket?.remoteAddress||'unknown'}`,Date.now(),{windowMs:LOGIN_IP_WINDOW_MS,maxAttempts:MAX_LOGIN_ATTEMPTS_PER_IP});
+    if(!ipAttempt.allowed){logLoginFailure(req,email,'ip_rate_limited');res.set('Retry-After',String(ipAttempt.retryAfterSeconds));return res.status(429).json({error:'too_many_login_attempts',message:LOGIN_IP_LIMIT_MESSAGE})}
+    if(loginFailureLimiter.blocked(req,email)){res.set('Retry-After','900');return res.status(429).json({error:'too_many_login_attempts',message:LOGIN_FAILURE_LIMIT_MESSAGE})}
     const attempt=await consumeLoginAttempt(pool,email);
     if(!attempt.allowed){
       logLoginFailure(req,email,'rate_limited');
       res.set('Retry-After',String(attempt.retryAfterSeconds));
       return res.status(429).json({error:'too_many_login_attempts',message:LOGIN_ATTEMPT_LIMIT_MESSAGE});
     }
-    if(!await verifyLoginCaptcha(req.body?.captchaToken,req.ip)){logLoginFailure(req,email,'captcha_failed');return res.status(403).json({error:'captcha_required',message:'Complete the security check and try again.'})}
+    if(!await verifyLoginCaptcha(req.body?.captchaToken,req.ip)){loginFailureLimiter.recordFailure(req,email);logLoginFailure(req,email,'captcha_failed');return res.status(403).json({error:'captcha_required',message:'Complete the security check and try again.'})}
     const {rows}=await pool.query('SELECT * FROM auth_users WHERE lower(email)=lower($1) LIMIT 1',[email]); const u=rows[0];
-    if(!u||!verifyPassword(password,u.password_hash)){logLoginFailure(req,email,'invalid_credentials');return res.status(401).json({error:'invalid_credentials'});}
+    if(!u||!verifyPassword(password,u.password_hash)){loginFailureLimiter.recordFailure(req,email);logLoginFailure(req,email,'invalid_credentials');return res.status(401).json({error:'invalid_credentials'});}
     if(String(u.status).toLowerCase()!=='active')return res.status(403).json({error:'account_disabled'});
     if(u.role==='school_admin'||u.metadata?.schoolAdmin===true)return res.status(403).json({error:'school_portal_login_required',message:'Use the School Bus sign-in page for this account.'});
     const assigned=(await pool.query('SELECT app_role FROM auth_user_app_roles WHERE user_id=$1 ORDER BY app_role',[u.id])).rows.map(row=>row.app_role);
     const activeRole=defaultAppRole(u.role,assigned);if(!activeRole)return res.status(403).json({error:'no_app_role_assigned'});
-    const expires=new Date(Date.now()+SESSION_DAYS*86400000),token=crypto.randomBytes(32).toString('hex');
+    loginFailureLimiter.clearFailures(req,email);
+    const rememberMe=req.body?.rememberMe===true;
+    const requestMfaEnrollment=u.role==='super_admin'&&req.body?.enrollMfa===true&&!u.mfa_totp_enabled_at;
+    if(u.role==='super_admin'&&(superAdminMfaRequired()||u.mfa_totp_enabled_at||requestMfaEnrollment)){
+      if(!mfaPortalOnly(req,res))return;
+      try{parseMfaEncryptionKey(process.env.SUPER_ADMIN_MFA_ENCRYPTION_KEY)}catch{return res.status(503).json({error:'super_admin_mfa_unavailable',message:'Authenticator sign-in is not configured on this server.'})}
+      if(u.mfa_totp_enabled_at&&!u.mfa_totp_secret_enc)return res.status(503).json({error:'super_admin_mfa_unavailable',message:'Authenticator sign-in needs administrator recovery.'});
+      const challengeId=await createMfaChallenge(u.id,u.mfa_totp_enabled_at?'login':'enroll',rememberMe);
+      return res.set('Cache-Control','no-store').json({challengeId,mfaRequired:!!u.mfa_totp_enabled_at,mfaEnrollmentRequired:!u.mfa_totp_enabled_at,user:{id:Number(u.id),name:u.name,email:u.email,role:'super_admin'}});
+    }
+    const lifetime=sessionLifetimeMs(req,rememberMe,{days:SESSION_DAYS,hours:boundedInteger(process.env.WEB_SESSION_HOURS,12,1,168)});
+    const expires=new Date(Date.now()+lifetime),token=crypto.randomBytes(32).toString('hex');
     await pool.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at,active_app_role) VALUES($1,$2,$3,$4)',[tokenHash(token),u.id,expires,activeRole]);
     const scoped=scopeUserToSession({...u,account_role:u.role,active_app_role:activeRole,available_roles:assigned});
-    res.set('Cache-Control','no-store').json({token,...authRolePayload(scoped),expiresAt:expires.toISOString()});
-  }catch(e){console.error(e);res.status(500).json({error:'login_failed'})}
+    if(isWebClient(req)){
+      const client=u.role==='super_admin'?'web-admin':u.role==='school_admin'?'web-school':requestClient(req);
+      setSessionCookie(req,res,token,{client,maxAgeSeconds:rememberMe?Math.ceil(lifetime/1000):undefined});
+    }
+    const response={...authRolePayload(scoped),expiresAt:expires.toISOString()};
+    if(!isWebClient(req))response.token=token;
+    res.set('Cache-Control','no-store').json(response);
+  }catch(e){console.error('Login request failed:',redactSensitiveText(e?.message||e));res.status(500).json({error:'login_failed'})}
+});
+app.post('/api/auth/mfa/totp/enroll',async(req,res)=>{
+  if(!mfaPortalOnly(req,res))return;
+  let encryptionKey;try{encryptionKey=parseMfaEncryptionKey(process.env.SUPER_ADMIN_MFA_ENCRYPTION_KEY)}catch{return res.status(503).json({error:'super_admin_mfa_unavailable'})}
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const challenge=await lockedMfaChallenge(client,req.body?.challengeId,'enroll');
+    if(!challenge||challenge.role!=='super_admin'||challenge.status!=='active'||challenge.mfa_totp_enabled_at){await client.query('ROLLBACK');return res.status(401).json({error:'mfa_challenge_expired'})}
+    const setupKey=createTotpSetupKey(),expiresAt=new Date(Date.now()+10*60*1000);
+    await client.query('UPDATE auth_users SET mfa_totp_pending_secret_enc=$1,mfa_totp_pending_expires_at=$2 WHERE id=$3',[encryptTotpSecret(setupKey,encryptionKey),expiresAt,challenge.user_id]);
+    await client.query('COMMIT');
+    res.set('Cache-Control','no-store').json({setupKey,issuer:'MASAR TRACK',account:challenge.email,expiresAt:expiresAt.toISOString()});
+  }catch(error){try{await client.query('ROLLBACK')}catch{};console.error('Super Admin authenticator setup failed:',redactSensitiveText(error?.message||error));res.status(503).json({error:'super_admin_mfa_unavailable'})}finally{client.release()}
+});
+app.post('/api/auth/mfa/totp/confirm',async(req,res)=>{
+  if(!mfaPortalOnly(req,res))return;
+  let encryptionKey;try{encryptionKey=parseMfaEncryptionKey(process.env.SUPER_ADMIN_MFA_ENCRYPTION_KEY)}catch{return res.status(503).json({error:'super_admin_mfa_unavailable'})}
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const challenge=await lockedMfaChallenge(client,req.body?.challengeId,'enroll');
+    if(!challenge||challenge.role!=='super_admin'||challenge.status!=='active'||challenge.mfa_totp_enabled_at||!challenge.mfa_totp_pending_secret_enc||new Date(challenge.mfa_totp_pending_expires_at||0)<=new Date()){await client.query('ROLLBACK');return res.status(401).json({error:'mfa_challenge_expired'})}
+    if(!await checkMfaRateLimit(client,req,res,challenge,'enrollment'))return;
+    const setupKey=decryptTotpSecret(challenge.mfa_totp_pending_secret_enc,encryptionKey),counter=verifyTotpCode(setupKey,req.body?.code);
+    if(counter===null){await rejectMfaAttempt(client,challenge);await auditMfaFailure(client,challenge,'enrollment');await client.query('COMMIT');return res.status(401).json({error:'invalid_mfa_code',message:'That authenticator code is incorrect or expired.'})}
+    const recoveryCodes=createRecoveryCodes(10),recoveryHashes=recoveryCodes.map(recoveryCodeHash);
+    const updated=(await client.query(`UPDATE auth_users SET mfa_totp_secret_enc=mfa_totp_pending_secret_enc,mfa_totp_enabled_at=NOW(),
+      mfa_totp_pending_secret_enc=NULL,mfa_totp_pending_expires_at=NULL,mfa_totp_last_counter=$1,mfa_recovery_codes=$2::jsonb
+      WHERE id=$3 RETURNING id,company_id,name,email,role,status,metadata`,[counter,JSON.stringify(recoveryHashes),challenge.user_id])).rows[0];
+    await client.query('DELETE FROM auth_mfa_challenges WHERE challenge_hash=$1',[challenge.challenge_hash]);
+    await client.query('DELETE FROM auth_sessions WHERE user_id=$1',[challenge.user_id]);
+    await client.query("INSERT INTO audit_events(user_id,action,entity_type,entity_id,detail) VALUES($1,'super_admin_mfa_enrolled','auth_user',$2,$3::jsonb)",[challenge.user_id,String(challenge.user_id),JSON.stringify({method:'totp',recoveryCodes:recoveryCodes.length})]);
+    const session=await createAuthenticatedSession(client,req,updated,'fleet',challenge.remember_me);
+    await client.query('COMMIT');sendAuthenticatedSession(req,res,session);
+    res.json({...session.response,recoveryCodes});
+  }catch(error){try{await client.query('ROLLBACK')}catch{};console.error('Super Admin authenticator confirmation failed:',redactSensitiveText(error?.message||error));res.status(503).json({error:'super_admin_mfa_unavailable'})}finally{client.release()}
+});
+app.post('/api/auth/mfa/verify',async(req,res)=>{
+  if(!mfaPortalOnly(req,res))return;
+  let encryptionKey;try{encryptionKey=parseMfaEncryptionKey(process.env.SUPER_ADMIN_MFA_ENCRYPTION_KEY)}catch{return res.status(503).json({error:'super_admin_mfa_unavailable'})}
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const challenge=await lockedMfaChallenge(client,req.body?.challengeId,'login');
+    if(!challenge||challenge.role!=='super_admin'||challenge.status!=='active'||!challenge.mfa_totp_enabled_at||!challenge.mfa_totp_secret_enc){await client.query('ROLLBACK');return res.status(401).json({error:'mfa_challenge_expired'})}
+    if(!await checkMfaRateLimit(client,req,res,challenge,'sign_in'))return;
+    const secret=decryptTotpSecret(challenge.mfa_totp_secret_enc,encryptionKey),counter=verifyTotpCode(secret,req.body?.code,{afterCounter:challenge.mfa_totp_last_counter});
+    let valid=counter!==null,recoveryHashes=Array.isArray(challenge.mfa_recovery_codes)?challenge.mfa_recovery_codes:[];
+    const recoveryIndex=valid?-1:recoveryCodeMatches(req.body?.code,recoveryHashes);
+    if(!valid&&recoveryIndex>=0){valid=true;recoveryHashes=recoveryHashes.filter((_value,index)=>index!==recoveryIndex)}
+    if(!valid){await rejectMfaAttempt(client,challenge);await auditMfaFailure(client,challenge,'sign_in');await client.query('COMMIT');return res.status(401).json({error:'invalid_mfa_code',message:'That authenticator code is incorrect or expired.'})}
+    if(counter!==null)await client.query('UPDATE auth_users SET mfa_totp_last_counter=$1 WHERE id=$2',[counter,challenge.user_id]);
+    if(recoveryIndex>=0)await client.query('UPDATE auth_users SET mfa_recovery_codes=$1::jsonb WHERE id=$2',[JSON.stringify(recoveryHashes),challenge.user_id]);
+    await client.query('DELETE FROM auth_mfa_challenges WHERE challenge_hash=$1',[challenge.challenge_hash]);
+    await client.query("INSERT INTO audit_events(user_id,action,entity_type,entity_id,detail) VALUES($1,'super_admin_mfa_verified','auth_user',$2,$3::jsonb)",[challenge.user_id,String(challenge.user_id),JSON.stringify({method:counter!==null?'totp':'recovery_code'})]);
+    const session=await createAuthenticatedSession(client,req,challenge,'fleet',challenge.remember_me);
+    await client.query('COMMIT');sendAuthenticatedSession(req,res,session);res.json(session.response);
+  }catch(error){try{await client.query('ROLLBACK')}catch{};console.error('Super Admin authenticator verification failed:',redactSensitiveText(error?.message||error));res.status(503).json({error:'super_admin_mfa_unavailable'})}finally{client.release()}
+});
+app.post('/api/auth/mfa/totp/disable',requireAuth,requireSuper,async(req,res)=>{
+  const password=String(req.body?.password||'');
+  if(password.length>1024)return res.status(401).json({error:'invalid_credentials'});
+  let encryptionKey;try{encryptionKey=parseMfaEncryptionKey(process.env.SUPER_ADMIN_MFA_ENCRYPTION_KEY)}catch{return res.status(503).json({error:'super_admin_mfa_unavailable'})}
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const stored=(await client.query('SELECT password_hash,mfa_totp_secret_enc,mfa_totp_last_counter,mfa_recovery_codes FROM auth_users WHERE id=$1 FOR UPDATE',[req.user.id])).rows[0];
+    if(!stored||!verifyPassword(password,stored.password_hash)){await client.query('ROLLBACK');return res.status(401).json({error:'invalid_credentials'})}
+    const secret=decryptTotpSecret(stored.mfa_totp_secret_enc,encryptionKey),counter=verifyTotpCode(secret,req.body?.code,{afterCounter:stored.mfa_totp_last_counter});
+    const recoveryHashes=Array.isArray(stored.mfa_recovery_codes)?stored.mfa_recovery_codes:[],recoveryIndex=counter===null?recoveryCodeMatches(req.body?.code,recoveryHashes):-1;
+    if(counter===null&&recoveryIndex<0){await client.query('ROLLBACK');return res.status(401).json({error:'invalid_mfa_code'})}
+    await client.query(`UPDATE auth_users SET mfa_totp_secret_enc=NULL,mfa_totp_enabled_at=NULL,mfa_totp_pending_secret_enc=NULL,
+      mfa_totp_pending_expires_at=NULL,mfa_totp_last_counter=NULL,mfa_recovery_codes='[]'::jsonb WHERE id=$1`,[req.user.id]);
+    await client.query('DELETE FROM auth_sessions WHERE user_id=$1',[req.user.id]);
+    await client.query("INSERT INTO audit_events(user_id,action,entity_type,entity_id,detail) VALUES($1,'super_admin_mfa_disabled','auth_user',$2,'{}'::jsonb)",[req.user.id,String(req.user.id)]);
+    await client.query('COMMIT');
+    if(req.authSource==='cookie')clearSessionCookie(req,res);
+    res.json({ok:true,reauthenticationRequired:true});
+  }catch(error){try{await client.query('ROLLBACK')}catch{};console.error('Super Admin authenticator removal failed:',redactSensitiveText(error?.message||error));res.status(503).json({error:'super_admin_mfa_unavailable'})}finally{client.release()}
 });
 app.get('/api/auth/me',requireAuth,(req,res)=>{const payload=authRolePayload(req.user);res.set('Cache-Control','no-store').json({...payload.user,activeRole:payload.activeRole,defaultRole:payload.defaultRole,availableRoles:payload.availableRoles})});
 app.post('/api/auth/switch-role',requireAuth,async(req,res)=>{
   const requested=String(req.body?.role||'').trim().toLowerCase();
   if(!['fleet','parent'].includes(requested))return res.status(400).json({error:'invalid_app_role',allowedRoles:req.user.available_roles});
   if(!req.user.available_roles.includes(requested))return res.status(403).json({error:'app_role_not_assigned',allowedRoles:req.user.available_roles});
-  const token=crypto.randomBytes(32).toString('hex'),expires=new Date(Date.now()+SESSION_DAYS*86400000);
+  const lifetime=sessionLifetimeMs(req,false,{days:SESSION_DAYS,hours:boundedInteger(process.env.WEB_SESSION_HOURS,12,1,168)});
+  const token=crypto.randomBytes(32).toString('hex'),expires=new Date(Date.now()+lifetime);
   try{
     await pool.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at,active_app_role) VALUES($1,$2,$3,$4)',[tokenHash(token),req.user.id,expires,requested]);
     const scoped=scopeUserToSession({...req.user,account_role:req.user.account_role||req.user.role,active_app_role:requested});
-    res.set('Cache-Control','no-store').json({token,...authRolePayload(scoped),expiresAt:expires.toISOString(),previousTokenRemainsScoped:true});
+    if(isWebClient(req))setSessionCookie(req,res,token,{client:requestClient(req)});
+    const response={...authRolePayload(scoped),expiresAt:expires.toISOString(),previousTokenRemainsScoped:true};
+    if(!isWebClient(req))response.token=token;
+    res.set('Cache-Control','no-store').json(response);
   }catch(error){console.error('Role switch failed:',error.message);res.status(500).json({error:'role_switch_failed'});}
 });
 app.post('/api/auth/link-parent-account',requireAuth,requireSuper,async(req,res)=>{
@@ -321,8 +523,8 @@ app.post('/api/news/:id/read',requireAuth,async(req,res)=>{
     res.json({ok:true});
   }catch(e){res.status(500).json({error:'news_read_failed'});}
 });
-app.post('/api/auth/logout',requireAuth,async(req,res)=>{try{const token=String(req.headers.authorization||'').replace(/^Bearer\s+/,'');await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1',[tokenHash(token)]);res.json({ok:true})}catch{res.json({ok:true})}});
-app.post('/api/auth/change-password',requireAuth,async(req,res)=>{const client=await pool.connect();try{const p=String(req.body.password||'');if(p.length<12)return res.status(400).json({error:'password_too_short',message:'Use a password of at least 12 characters.'});const currentHash=tokenHash(String(req.headers.authorization||'').replace(/^Bearer\s+/,''));await client.query('BEGIN');await client.query('UPDATE auth_users SET password_hash=$1,updated_at=NOW() WHERE id=$2',[hashPassword(p),req.user.id]);await client.query('DELETE FROM auth_sessions WHERE user_id=$1 AND token_hash<>$2',[req.user.id,currentHash]);await client.query('COMMIT');res.json({ok:true,otherSessionsRevoked:true})}catch(e){try{await client.query('ROLLBACK')}catch{}console.error(e);res.status(500).json({error:'password_change_failed'})}finally{client.release()}});
+app.post('/api/auth/logout',requireAuth,async(req,res)=>{try{await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1',[tokenHash(req.authToken||'')])}catch{}if(isWebClient(req)||req.authSource==='cookie')clearSessionCookie(req,res);res.json({ok:true})});
+app.post('/api/auth/change-password',requireAuth,async(req,res)=>{const client=await pool.connect();try{const p=String(req.body.password||'');if(p.length<12)return res.status(400).json({error:'password_too_short',message:'Use a password of at least 12 characters.'});const currentHash=tokenHash(req.authToken||'');await client.query('BEGIN');await client.query('UPDATE auth_users SET password_hash=$1,updated_at=NOW() WHERE id=$2',[hashPassword(p),req.user.id]);await client.query('DELETE FROM auth_sessions WHERE user_id=$1 AND token_hash<>$2',[req.user.id,currentHash]);await client.query('COMMIT');res.json({ok:true,otherSessionsRevoked:true})}catch(e){try{await client.query('ROLLBACK')}catch{}console.error('Password change failed:',redactSensitiveText(e?.message||e));res.status(500).json({error:'password_change_failed'})}finally{client.release()}});
 app.get('/api/company/me',requireAuth,async(req,res)=>{try{if(!req.user.company_id)return res.json(null);const {rows}=await pool.query('SELECT id,name,email,status,metadata FROM companies WHERE id=$1',[req.user.company_id]);res.json(redactSensitiveData(rows[0]||null))}catch(e){res.status(500).json({error:'company_failed'})}});
 
 app.post('/api/companies/:id/support-login',requireAuth,requireSuper,async(req,res)=>{
@@ -337,7 +539,8 @@ app.post('/api/companies/:id/support-login',requireAuth,requireSuper,async(req,r
   const token=crypto.randomBytes(32).toString('hex'),expires=new Date(Date.now()+15*60000);
   await pool.query("INSERT INTO auth_sessions(token_hash,user_id,expires_at,active_app_role) VALUES($1,$2,$3,'fleet')",[tokenHash(token),u.id,expires]);
   console.info(JSON.stringify({event:'company_support_login',actor:req.user.id,companyId:id,userId:u.id,expiresAt:expires.toISOString()}));
-  res.set('Cache-Control','no-store').json({token,expiresAt:expires.toISOString()});
+  setSessionCookie(req,res,token,{client:'web-support',maxAgeSeconds:15*60});
+  res.set('Cache-Control','no-store').json({ok:true,expiresAt:expires.toISOString()});
  } catch(e){console.error('Company support login failed');res.status(500).json({error:'Unable to open the company account.'})}
 });
 
@@ -348,7 +551,9 @@ app.post('/api/users/:id/support-login',requireAuth,requireSuper,async(req,res)=
   if(!u)return res.status(404).json({error:'Active user not found.'});if(String(u.company_status).toLowerCase()!=='active')return res.status(403).json({error:'Company is not active.'});
   const roles=(await pool.query('SELECT app_role FROM auth_user_app_roles WHERE user_id=$1',[u.id])).rows.map(row=>row.app_role),activeRole=defaultAppRole(u.role,roles);if(!activeRole)return res.status(403).json({error:'no_app_role_assigned'});
   const token=crypto.randomBytes(32).toString('hex'),expires=new Date(Date.now()+15*60000);await pool.query('INSERT INTO auth_sessions(token_hash,user_id,expires_at,active_app_role) VALUES($1,$2,$3,$4)',[tokenHash(token),u.id,expires,activeRole]);
-  console.info(JSON.stringify({event:'user_support_login',actor:req.user.id,companyId:u.company_id,userId:u.id,expiresAt:expires.toISOString()}));res.set('Cache-Control','no-store').json({token,expiresAt:expires.toISOString()});
+  console.info(JSON.stringify({event:'user_support_login',actor:req.user.id,companyId:u.company_id,userId:u.id,expiresAt:expires.toISOString()}));
+  setSessionCookie(req,res,token,{client:'web-support',maxAgeSeconds:15*60});
+  res.set('Cache-Control','no-store').json({ok:true,expiresAt:expires.toISOString()});
  }catch(e){console.error('User support login failed');res.status(500).json({error:'Unable to open the user account.'})}
 });
 
@@ -450,7 +655,7 @@ app.post('/api/companies', requireAuth, requireSuper, async (req,res)=>{
     const adminMapAccess=normalizeMapAccess(req.body.adminMapAccess||{});if(!mapAccessDefinitions.some(([key])=>adminMapAccess[key])){await client.query('ROLLBACK');return res.status(400).json({error:'at_least_one_base_map_required'});}const u=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status,metadata) VALUES($1,$2,$3,$4,'company_admin','active',$5::jsonb) RETURNING id,name,email,role,status`,[company.id,adminName,email,hashPassword(password),JSON.stringify({mapAccess:adminMapAccess})]);
     await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[u.rows[0].id,req.user.id]);
     await client.query(`INSERT INTO company_state(company_id,data,updated_by) VALUES($1,$2::jsonb,$3) ON CONFLICT(company_id) DO NOTHING`,[company.id,JSON.stringify({}),req.user.id]);
-    await client.query(`INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'company_created','company',$3,$4::jsonb)`,[company.id,req.user.id,String(company.id),JSON.stringify({name,email})]);
+    await client.query(`INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'company_created','company',$3,$4::jsonb)`,[company.id,req.user.id,String(company.id),JSON.stringify({name,email,adminUserId:Number(u.rows[0].id),adminRole:'company_admin',grantedAppRoles:['fleet']})]);
     await client.query('UPDATE companies SET metadata=$1::jsonb WHERE id=$2',[JSON.stringify(metadata),company.id]);
     await client.query('COMMIT');
     res.status(201).json({company,admin:u.rows[0]});
@@ -475,6 +680,7 @@ app.put('/api/companies/:id', requireAuth, requireSuper, async (req,res)=>{
       if(password.length<4){await client.query('ROLLBACK');return res.status(400).json({error:'password_required_for_company_admin'});}
       const created=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status) VALUES($1,$2,$3,$4,'company_admin','active') RETURNING id`,[id,adminName,email,hashPassword(password)]);
       await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[created.rows[0].id,req.user.id]);
+      await client.query("INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'app_role_granted','auth_user',$3,$4::jsonb)",[id,req.user.id,String(created.rows[0].id),JSON.stringify({appRole:'fleet',reason:'company_admin_creation'})]);
     }
     await client.query(`INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'company_updated','company',$3,$4::jsonb)`,[id,req.user.id,String(id),JSON.stringify({name,email})]);
     await client.query('UPDATE companies SET metadata=$1::jsonb WHERE id=$2',[JSON.stringify(cleanMetadata(req.body.metadata)),id]);await client.query('COMMIT');res.json(rows[0]);
@@ -922,7 +1128,7 @@ app.post('/api/users',requireAuth,manageUsers,async(req,res)=>{
   const name=cleanString(req.body.name),email=cleanString(req.body.email).toLowerCase(),password=String(req.body.password||'');
   const role=req.body.role==='company_admin'?'company_admin':'company_user';
   if(!companyId||!name||!email.includes('@')||password.length<12)return res.status(400).json({error:'Name, company, valid email and a password of at least 12 characters are required.'});
-  const client=await pool.connect();try{await client.query('BEGIN');const r=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status,metadata) VALUES($1,$2,$3,$4,$5,'active',$6::jsonb) RETURNING ${userFields}`,[companyId,name,email,hashPassword(password),role,JSON.stringify(cleanMetadata(req.body.metadata))]);await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[r.rows[0].id,req.user.id]);await client.query('COMMIT');res.status(201).json(r.rows[0])}catch(e){try{await client.query('ROLLBACK')}catch{};res.status(e.code==='23505'?409:500).json({error:e.code==='23505'?'Email already exists.':'Unable to create user.'})}finally{client.release()}
+  const client=await pool.connect();try{await client.query('BEGIN');const r=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status,metadata) VALUES($1,$2,$3,$4,$5,'active',$6::jsonb) RETURNING ${userFields}`,[companyId,name,email,hashPassword(password),role,JSON.stringify(cleanMetadata(req.body.metadata))]);await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[r.rows[0].id,req.user.id]);await client.query("INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'user_created','auth_user',$3,$4::jsonb)",[companyId,req.user.id,String(r.rows[0].id),JSON.stringify({accountRole:role,grantedAppRoles:['fleet']})]);await client.query('COMMIT');res.status(201).json(r.rows[0])}catch(e){try{await client.query('ROLLBACK')}catch{};res.status(e.code==='23505'?409:500).json({error:e.code==='23505'?'Email already exists.':'Unable to create user.'})}finally{client.release()}
 });
 app.delete('/api/users',requireAuth,requireSuper,async(req,res)=>{
   if(String(req.body?.confirmation||'')!=='DELETE ALL USERS')return res.status(400).json({error:'Type DELETE ALL USERS to confirm.'});
@@ -950,7 +1156,7 @@ app.put('/api/users/:id',requireAuth,manageUsers,async(req,res)=>{
     const name=cleanString(req.body.name),email=cleanString(req.body.email).toLowerCase(),password=String(req.body.password||'');
     if(!name||!email.includes('@')||(password&&password.length<12)){await client.query('ROLLBACK');return res.status(400).json({error:'Check name, email and password (minimum 12 characters).'})}
     const r=await client.query(`UPDATE auth_users SET name=$1,email=$2,role=$3,status=$4,password_hash=$5,metadata=$7::jsonb,updated_at=NOW() WHERE id=$6 RETURNING ${userFields}`,[name,email,role,status,password?hashPassword(password):u.password_hash,u.id,JSON.stringify(cleanMetadata(req.body.metadata))]);
-    await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[u.id,req.user.id]);
+    if(role!==u.role)await client.query("INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'user_role_changed','auth_user',$3,$4::jsonb)",[u.company_id,req.user.id,String(u.id),JSON.stringify({from:u.role,to:role})]);
     if(password||status!=='active'||role!==u.role)await client.query('DELETE FROM auth_sessions WHERE user_id=$1',[u.id]);
     await client.query('COMMIT');res.json(r.rows[0]);
   }catch(e){await client.query('ROLLBACK');res.status(e.code==='23505'?409:500).json({error:e.code==='23505'?'Email already exists.':'Unable to update user.'})}finally{client.release()}
@@ -1076,6 +1282,7 @@ await pool.query(await readFile(new URL('./migration-geocoding.sql',import.meta.
 await pool.query(await readFile(new URL('./migration-parent-bus.sql',import.meta.url),'utf8'));
 await pool.query(await readFile(new URL('./migration-auth-app-roles.sql',import.meta.url),'utf8'));
 await pool.query(await readFile(new URL('./migration-login-attempts.sql',import.meta.url),'utf8'));
+await pool.query(await readFile(new URL('./migration-super-admin-mfa.sql',import.meta.url),'utf8'));
 const loginAttemptPruneTimer=setInterval(()=>pruneLoginAttemptWindows(pool).catch(error=>console.error('Login-attempt cleanup unavailable:',error.message)),60*60*1000);
 loginAttemptPruneTimer.unref();
 await initializeDeviceProfiles(pool);

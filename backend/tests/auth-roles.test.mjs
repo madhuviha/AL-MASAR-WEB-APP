@@ -23,3 +23,9 @@ test('a session cannot switch into a role absent from its grants',()=>{
 test('role names are constrained to fleet and parent',()=>{
   assert.deepEqual(normalizeAppRoles('company_admin',['fleet','parent','super_admin','parent']),['fleet','parent']);
 });
+
+test('an account without explicit app-role grants receives no implicit portal access',()=>{
+  assert.deepEqual(normalizeAppRoles('company_admin',undefined),[]);
+  assert.deepEqual(normalizeAppRoles('parent',undefined),[]);
+  assert.equal(defaultAppRole('company_admin',undefined),null);
+});

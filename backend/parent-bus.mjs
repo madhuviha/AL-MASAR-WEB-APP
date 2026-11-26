@@ -274,7 +274,9 @@ export async function initializeParentBus(app,{pool,requireAuth,readLiveSnapshot
       if(children.rowCount!==childIds.length){await client.query('ROLLBACK');return res.status(404).json({error:'school_child_not_found'});}
       const user=(await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status,metadata)
         VALUES($1,$2,$3,$4,'parent','active',$5::jsonb) RETURNING id,company_id AS "companyId",name,email,role,status`,[companyId,name,email,hashPassword(password),JSON.stringify({schoolParent:true,notificationPreferences})])).rows[0];
+      await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'parent',$2) ON CONFLICT(user_id,app_role) DO NOTHING",[user.id,req.user.id]);
       for(const childId of childIds)await client.query('INSERT INTO school_child_parents(child_id,parent_user_id) VALUES($1,$2)',[childId,user.id]);
+      await client.query("INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'school_parent_created','auth_user',$3,$4::jsonb)",[companyId,req.user.id,String(user.id),JSON.stringify({accountRole:'parent',grantedAppRoles:['parent'],linkedChildCount:childIds.length})]);
       await client.query('COMMIT');res.status(201).json({...user,childIds});
     }catch(error){try{await client.query('ROLLBACK')}catch{};res.status(error.code==='23505'?409:500).json({error:error.code==='23505'?'email_already_registered':'school_parent_create_failed'});}finally{client.release();}
   });
@@ -331,6 +333,7 @@ export async function initializeParentBus(app,{pool,requireAuth,readLiveSnapshot
         await client.query("DELETE FROM mobile_push_outbox WHERE token_hash IN(SELECT token_hash FROM mobile_push_tokens WHERE user_id=$1 AND app_role='parent')",[parentId]);
         await client.query("DELETE FROM mobile_push_tokens WHERE user_id=$1 AND app_role='parent'",[parentId]);
         await client.query('DELETE FROM school_child_parents WHERE parent_user_id=$1',[parentId]);
+        await client.query("INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'parent_app_role_revoked','auth_user',$3,'{}'::jsonb)",[companyId,req.user.id,String(parentId)]);
         await client.query('COMMIT');return res.json({ok:true,id:parentId,fleetAccountPreserved:true});
       }
       const deleted=await client.query(`UPDATE auth_users SET status='inactive',
@@ -339,6 +342,7 @@ export async function initializeParentBus(app,{pool,requireAuth,readLiveSnapshot
       if(!deleted.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'school_parent_not_found'});}
       await client.query('DELETE FROM school_child_parents WHERE parent_user_id=$1',[parentId]);
        await client.query('DELETE FROM school_portal_sessions WHERE user_id=$1',[parentId]);
+      await client.query("INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'school_parent_deactivated','auth_user',$3,'{}'::jsonb)",[companyId,req.user.id,String(parentId)]);
       await client.query('COMMIT');res.json({ok:true,id:parentId});
     }catch(error){try{await client.query('ROLLBACK')}catch{};console.error('School parent delete failed:',error.message);res.status(500).json({error:'school_parent_delete_failed'});}finally{client.release();}
   });

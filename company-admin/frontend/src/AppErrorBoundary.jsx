@@ -1,15 +1,12 @@
 import React from 'react';
-
-const token=()=>location.pathname.startsWith('/admin')?localStorage.getItem('inviha_super_token'):sessionStorage.getItem('inviha_company_support_token')||localStorage.getItem('inviha_company_token');
+import {authHeaders} from './api';
 
 export default class AppErrorBoundary extends React.Component{
  constructor(props){super(props);this.state={failed:false,detail:''}}
  static getDerivedStateFromError(){return{failed:true}}
  componentDidCatch(error,info){
   this.setState({detail:[String(error?.name||'Error')+': '+String(error?.message||error||'Unknown render error'),String(info?.componentStack||'')].filter(Boolean).join('\n')});
-  const auth=token();
-  if(!auth)return;
-  fetch('/inviha-api/api/diagnostics/client-error',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+auth},body:JSON.stringify({portal:this.props.portal||'company',message:String(error?.message||error||'Browser application error'),stack:String(error?.stack||info?.componentStack||''),path:location.pathname+location.search})}).catch(()=>{});
+  fetch('/inviha-api/api/diagnostics/client-error',{method:'POST',credentials:'same-origin',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({portal:this.props.portal||'company',message:String(error?.message||error||'Browser application error'),stack:String(error?.stack||info?.componentStack||''),path:location.pathname+location.search})}).catch(()=>{});
  }
  render(){
   if(!this.state.failed)return this.props.children;

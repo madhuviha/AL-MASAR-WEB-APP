@@ -23,7 +23,7 @@ if(!['localhost','127.0.0.1','::1'].includes(parsed.hostname)||parsed.port==='15
 }
 
 const here=dirname(fileURLToPath(import.meta.url));
-const files=['schema.sql','migration-parent-bus.sql','migration-auth-app-roles.sql','migration-school-portal.sql','migration-school-push.sql','migration-login-attempts.sql'];
+const files=['schema.sql','migration-parent-bus.sql','migration-auth-app-roles.sql','migration-school-portal.sql','migration-school-admin-role.sql','migration-school-push.sql','migration-login-attempts.sql','migration-super-admin-mfa.sql'];
 const {Pool}=pg;
 const pool=new Pool({connectionString,max:1,connectionTimeoutMillis:5000,application_name:'masar-school-migration'});
 let client;

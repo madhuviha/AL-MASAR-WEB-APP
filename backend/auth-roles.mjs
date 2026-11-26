@@ -1,7 +1,7 @@
 const VALID_APP_ROLES = new Set(['fleet', 'parent']);
 
 export function normalizeAppRoles(accountRole, assignedRoles) {
-  if (!Array.isArray(assignedRoles)) return [String(accountRole || '').toLowerCase() === 'parent' ? 'parent' : 'fleet'];
+  if (!Array.isArray(assignedRoles)) return [];
   const roles = [...new Set((Array.isArray(assignedRoles) ? assignedRoles : [])
     .map(role => String(role || '').trim().toLowerCase())
     .filter(role => VALID_APP_ROLES.has(role)))];
