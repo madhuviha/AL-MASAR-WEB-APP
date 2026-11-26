@@ -309,3 +309,191 @@
   object-fit:cover!important;
 }
 .masarLoginCard .loginAppLinks .appStoreBadge:hover{transform:translateY(-1px);filter:brightness(1.06)}
+
+/* Split-screen MASAR sign-in inspired by the approved reference. */
+.secureLogin.productionLogin,.authPage.productionAdminLogin{
+  display:grid!important;
+  grid-template-columns:minmax(0,1.08fr) minmax(520px,.92fr)!important;
+  grid-template-rows:minmax(0,1fr)!important;
+  align-items:stretch!important;
+  justify-items:stretch!important;
+  place-items:stretch!important;
+  gap:0!important;
+  width:100vw!important;
+  max-width:100vw!important;
+  height:100dvh!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:0!important;
+  background:var(--login-background,#f3f7fb)!important;
+  color:#0b2748!important;
+}
+.loginHero{
+  position:relative;
+  grid-column:1;
+  grid-row:1;
+  min-width:0;
+  min-height:100dvh;
+  overflow:hidden;
+  isolation:isolate;
+  color:#f7fbff;
+  background:#061a35;
+}
+.loginHeroPhoto{
+  position:absolute;
+  z-index:-3;
+  inset:0;
+  background-image:
+    linear-gradient(180deg,rgba(3,19,43,.95) 0%,rgba(3,23,49,.66) 35%,rgba(3,23,49,.25) 68%,rgba(3,19,43,.91) 100%),
+    linear-gradient(90deg,rgba(3,17,38,.28),transparent 72%),
+    var(--login-custom-background,none),
+    var(--login-default-hero-image);
+  background-position:center,center,center,64% center;
+  background-size:cover,cover,cover,cover;
+  background-repeat:no-repeat;
+  transform:scale(1.015);
+}
+.loginHero::before{
+  content:"";
+  position:absolute;
+  z-index:-2;
+  inset:0;
+  opacity:.2;
+  pointer-events:none;
+  background-image:radial-gradient(rgba(114,191,255,.34) .7px,transparent .7px);
+  background-size:22px 22px;
+  mask-image:linear-gradient(180deg,#000,transparent 68%);
+}
+.loginHeroRoute{position:absolute;z-index:-1;inset:16% 0 14%;pointer-events:none;opacity:.85}
+.loginHeroRoute svg{width:100%;height:100%;overflow:visible}
+.loginHeroRoute path{fill:none;stroke:#08aaff;stroke-width:3;stroke-linecap:round;stroke-dasharray:1 1;filter:drop-shadow(0 0 7px rgba(13,166,255,.8));opacity:.7}
+.loginHeroRoute circle{fill:#08baff;stroke:#e8f8ff;stroke-width:3;filter:drop-shadow(0 0 8px rgba(0,169,255,.9))}
+.loginHeroCopy{position:absolute;top:clamp(45px,8.4vh,110px);left:clamp(34px,5vw,86px);width:min(500px,calc(100% - 68px));z-index:1}
+.loginHeroEyebrow{display:inline-flex;align-items:center;gap:10px;color:#c3dcf6;font-size:12px;font-weight:800;letter-spacing:.18em}
+.loginHeroEyebrow i{width:8px;height:8px;border-radius:50%;background:#159bff;box-shadow:0 0 14px #159bff}
+.loginHeroCopy h2{margin:25px 0 12px;color:#fff;font-size:clamp(38px,4.15vw,66px);line-height:1.02;font-weight:800;letter-spacing:-.045em}
+.loginHeroCopy h2 em{color:#27aaff;font-style:normal}
+.loginHeroCopy p{max-width:430px;margin:0;color:#d0e0f2;font-size:clamp(15px,1.25vw,20px);line-height:1.55;font-weight:450}
+.loginHeroRule{display:block;width:78px;height:4px;margin-top:22px;border-radius:6px;background:linear-gradient(90deg,#138df3,#04caff);box-shadow:0 0 16px rgba(18,162,255,.36)}
+.loginHeroStatus{position:absolute;z-index:1;left:clamp(210px,30%,390px);bottom:clamp(190px,30vh,325px);display:flex;align-items:center;gap:14px;width:min(390px,calc(100% - 250px));min-height:92px;padding:14px 17px;border:1px solid rgba(27,171,255,.76);border-radius:20px;background:linear-gradient(125deg,rgba(4,31,62,.94),rgba(3,44,77,.82));box-shadow:0 16px 36px rgba(0,11,30,.42),inset 0 0 28px rgba(15,153,255,.12);backdrop-filter:blur(12px)}
+.loginHeroStatusIcon{display:grid;place-items:center;flex:0 0 52px;width:52px;height:52px;border:1px solid rgba(83,188,255,.25);border-radius:50%;background:rgba(14,130,221,.18);color:#8bd7ff}
+.loginHeroStatusIcon svg{width:29px;height:29px}
+.loginHeroStatusCopy{display:grid;gap:4px;min-width:0}
+.loginHeroStatusCopy small{color:#a9c8e8;font-size:10px;line-height:1.2;letter-spacing:.08em}
+.loginHeroStatusCopy b{color:#fff;font-size:16px;line-height:1.2}
+.loginHeroReady{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:6px 10px;border-radius:999px;background:rgba(4,178,118,.2);color:#b4ffe0;font-size:10px;font-weight:800;letter-spacing:.06em}
+.loginHeroReady i{width:7px;height:7px;border-radius:50%;background:#00df9a;box-shadow:0 0 9px #00df9a}
+.loginHeroFeatures{position:absolute;z-index:1;left:clamp(34px,5vw,86px);right:clamp(22px,4vw,65px);bottom:clamp(26px,5vh,58px);display:grid;grid-template-columns:1fr auto 1.25fr auto 1.15fr;align-items:center;gap:clamp(10px,1.6vw,28px);color:white}
+.loginHeroFeatures>div{display:flex;align-items:center;gap:12px;min-width:0}
+.loginHeroFeatures>div>svg{flex:0 0 auto;width:31px;height:31px;color:#48baff;filter:drop-shadow(0 0 8px rgba(27,157,255,.7))}
+.loginHeroFeatures>div>span{display:grid;gap:5px;min-width:0}
+.loginHeroFeatures b{font-size:15px;line-height:1.1}
+.loginHeroFeatures small{color:#c2d6ec;font-size:11px;white-space:nowrap}
+.loginHeroFeatures>i{width:1px;height:42px;background:rgba(168,207,242,.35)}
+.secureLogin.productionLogin>.masarLoginCard,.authPage.productionAdminLogin>.masarLoginCard{
+  position:relative!important;
+  grid-column:2!important;
+  grid-row:1!important;
+  align-self:center!important;
+  justify-self:center!important;
+  width:min(720px,calc(100% - 64px))!important;
+  max-width:720px!important;
+  max-height:calc(100dvh - 40px)!important;
+  height:auto!important;
+  margin:20px!important;
+  padding:clamp(26px,4.2vh,50px) clamp(28px,4vw,68px) 28px!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  border:1px solid rgba(255,255,255,.93)!important;
+  border-radius:28px!important;
+  background:linear-gradient(145deg,rgba(var(--login-panel-rgb,255,255,255),var(--login-panel-opacity,.96)),rgba(239,247,255,.97) 58%,rgba(230,242,254,.96))!important;
+  color:var(--login-text,#0b2748)!important;
+  box-shadow:inset 0 1px 0 #fff,0 24px 70px rgba(0,20,49,.2),0 0 0 7px rgba(203,229,255,.15)!important;
+  backdrop-filter:blur(18px) saturate(120%)!important;
+  -webkit-backdrop-filter:blur(18px) saturate(120%)!important;
+  scrollbar-width:thin;
+  scrollbar-color:#9ebbd7 transparent;
+}
+.secureLogin.productionLogin>.masarLoginCard::after,.authPage.productionAdminLogin>.masarLoginCard::after{inset:7px;border-color:rgba(180,213,246,.3);border-radius:21px;animation:none}
+.secureLogin.productionLogin .masarLoginCard .fleetLoginBadge,.authPage.productionAdminLogin .masarLoginCard .fleetLoginBadge{width:min(100%,350px)!important;height:92px!important;max-height:92px!important;margin:0 auto 22px!important;border:0!important;border-radius:12px!important;background:transparent!important;box-shadow:none!important}
+.secureLogin.productionLogin .masarLoginCard .fleetLoginBadge:has(img),.authPage.productionAdminLogin .masarLoginCard .fleetLoginBadge:has(img){padding:0!important}
+.masarLoginCard .fleetLoginBadge img{object-fit:contain!important}
+.secureLogin.productionLogin .masarLoginCard h1,.authPage.productionAdminLogin .masarLoginCard h1{margin:0 0 5px!important;color:#0b2748!important;font-size:clamp(30px,3vw,42px)!important;line-height:1.12!important;letter-spacing:-.04em!important;text-shadow:none!important}
+.secureLogin.productionLogin .masarLoginCard>p,.authPage.productionAdminLogin .masarLoginCard>p{margin:0 0 28px!important;color:#55718e!important;font-size:17px!important;line-height:1.45!important}
+.secureLogin.productionLogin .masarLoginCard>label,.authPage.productionAdminLogin .masarLoginCard>label{margin:0 0 18px!important;color:#0b2748!important;font-size:14px!important;font-weight:750!important}
+.masarLoginCard .loginFieldLabel{margin:0 0 8px;color:#0b2748!important;font-size:14px!important;font-weight:750!important}
+.secureLogin.productionLogin .masarLoginCard input,.authPage.productionAdminLogin .masarLoginCard input{height:58px!important;margin:0!important;border:1px solid #cfdeee!important;border-radius:14px!important;background:rgba(255,255,255,.88)!important;color:#152f4d!important;box-shadow:inset 0 1px 2px rgba(15,48,83,.04)!important;font-size:16px!important}
+.secureLogin.productionLogin .masarLoginCard .loginInputWrap>input,.authPage.productionAdminLogin .masarLoginCard .loginInputWrap>input{padding:0 52px 0 64px!important}
+.secureLogin.productionLogin .masarLoginCard .loginInputWrap>svg,.authPage.productionAdminLogin .masarLoginCard .loginInputWrap>svg{left:19px!important;width:23px;height:23px;color:#55718e!important}
+.masarLoginCard .loginInputWrap{min-height:58px;border:1px solid #cfdeee;border-radius:14px;background:rgba(255,255,255,.88);box-shadow:0 1px 2px rgba(15,48,83,.04);transition:border-color .18s ease,box-shadow .18s ease}
+.masarLoginCard .loginInputWrap:focus-within{border-color:#278df0;box-shadow:0 0 0 3px rgba(33,135,239,.14)}
+.masarLoginCard .loginInputWrap:focus-within>input{border-color:transparent!important}
+.masarLoginCard .fleetPassword>button{top:50%!important;right:10px!important;width:36px!important;height:36px!important;transform:translateY(-50%);color:#607895!important}
+.masarLoginCard .loginOptions{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:2px 0 20px;color:#0b2748;font-size:14px}
+.masarLoginCard .loginRemember{display:inline-flex!important;flex-direction:row!important;align-items:center;gap:9px;margin:0!important;color:#0b2748!important;font-size:14px!important;font-weight:600!important;cursor:pointer}
+.masarLoginCard .loginRemember input[type=checkbox]{appearance:none;width:25px!important;height:25px!important;min-width:25px;margin:0!important;border:1px solid #a9c4df!important;border-radius:7px!important;background:#fff!important;box-shadow:none!important;cursor:pointer}
+.masarLoginCard .loginRemember input[type=checkbox]:checked{border-color:#0866c8!important;background:#0866c8!important;box-shadow:inset 0 0 0 5px #0866c8!important}
+.masarLoginCard .loginRemember input[type=checkbox]:checked::after{content:"✓";display:block;color:#fff;text-align:center;font:800 17px/23px Arial,sans-serif}
+.loginRecoveryLink{color:#0878e8;font-size:14px;font-weight:700;text-decoration:none}
+.loginRecoveryLink:hover{text-decoration:underline}
+.secureLogin.productionLogin .masarLoginCard .loginSubmit,.authPage.productionAdminLogin .masarLoginCard .greenBtn{position:relative;width:100%!important;min-height:60px!important;margin:8px 0 0!important;border:1px solid rgba(31,154,255,.55)!important;border-radius:999px!important;background:linear-gradient(100deg,#0755ce 0%,#0674e7 54%,#0799f6 100%)!important;box-shadow:0 12px 26px rgba(7,107,218,.25),inset 0 1px 0 rgba(255,255,255,.25)!important;color:#fff!important;font-size:19px!important;font-weight:800!important;text-shadow:none!important}
+.secureLogin.productionLogin .masarLoginCard .loginSubmit::before,.authPage.productionAdminLogin .masarLoginCard .greenBtn::before{display:none}
+.secureLogin.productionLogin .masarLoginCard .loginSubmit::after,.authPage.productionAdminLogin .masarLoginCard .greenBtn::after{content:"→";display:inline-block;margin-left:12px;font-size:23px;line-height:1;vertical-align:-1px}
+.secureLogin.productionLogin .masarLoginCard .loginSubmit:not(:disabled):hover,.authPage.productionAdminLogin .masarLoginCard .greenBtn:not(:disabled):hover{transform:translateY(-1px);filter:brightness(1.04);box-shadow:0 15px 30px rgba(7,107,218,.32)!important}
+.masarLoginCard .loginCaptcha{margin:0 0 10px}
+.masarLoginCard .loginError,.masarLoginCard .authError{margin:0 0 14px!important;border:1px solid #f2bac1!important;border-radius:10px!important;background:#fff0f1!important;color:#992e3a!important}
+.loginAppsBlock{margin-top:28px}
+.loginAppsHeading{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;color:#607993;font-size:14px;font-weight:700;text-align:center}
+.loginAppsHeading>span{height:1px;background:#cbd9e8}
+.masarLoginCard .loginAppLinks{display:flex;justify-content:center;align-items:center;gap:15px;margin-top:18px;padding:0;border:0}
+.masarLoginCard .loginAppLinks .appStoreBadge{flex:0 1 190px!important;width:190px!important;height:58px!important;border-radius:9px!important;box-shadow:0 5px 14px rgba(0,23,51,.14)!important}
+.masarLoginCard .loginSupportLinks{display:flex;align-items:center;justify-content:center;gap:0;margin-top:27px;flex-wrap:wrap}
+.masarLoginCard .supportLink{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:34px;flex:0 1 auto;padding:4px 18px;border:0;border-right:1px solid #c6d5e5;border-radius:0;background:transparent!important;color:#173655!important;font-size:14px;font-weight:650;text-decoration:none;box-shadow:none!important}
+.masarLoginCard .supportLink:last-child{border-right:0}
+.masarLoginCard .supportLink:hover{color:#0878e8!important;background:transparent!important}
+.masarLoginCard .supportLink svg{width:18px;height:18px;color:#087be9}
+.masarLoginCard .supportLink[href^="https://wa.me/"] svg{color:#17aa68}
+.masarLoginCard .loginBrandText.bottom{margin-top:18px;color:#617994!important;font-size:11px;font-weight:600;opacity:1!important;text-align:center}
+.masarLoginCard .loginBrandText.welcome{margin:0 0 10px;color:#54718d!important}
+@media(max-width:1100px){
+  .secureLogin.productionLogin,.authPage.productionAdminLogin{grid-template-columns:minmax(0,1fr) minmax(440px,.95fr)!important}
+  .loginHeroCopy h2{font-size:clamp(36px,4.1vw,52px)}
+  .loginHeroStatus{left:24px;width:min(380px,calc(100% - 48px));bottom:clamp(160px,27vh,245px)}
+  .loginHeroFeatures{grid-template-columns:1fr auto 1fr;gap:12px}
+  .loginHeroFeatures>div:last-of-type,.loginHeroFeatures>i:nth-of-type(2){display:none}
+  .secureLogin.productionLogin>.masarLoginCard,.authPage.productionAdminLogin>.masarLoginCard{width:calc(100% - 36px)!important;padding:34px 32px 25px!important}
+}
+@media(max-width:900px){
+  .secureLogin.productionLogin,.authPage.productionAdminLogin{grid-template-columns:minmax(0,1fr)!important;place-items:center!important;overflow-y:auto!important;background:radial-gradient(ellipse at 50% 0%,#d7eaff 0,#f2f7fc 48%,#e8f1fa 100%)!important}
+  .loginHero{display:none}
+  .secureLogin.productionLogin>.masarLoginCard,.authPage.productionAdminLogin>.masarLoginCard{grid-column:1!important;width:min(620px,calc(100% - 28px))!important;max-height:calc(100dvh - 28px)!important;margin:14px!important;padding:34px clamp(24px,6vw,54px) 28px!important}
+}
+@media(max-width:560px){
+  .secureLogin.productionLogin,.authPage.productionAdminLogin{align-items:start!important;justify-items:center!important;padding:10px!important}
+  .secureLogin.productionLogin>.masarLoginCard,.authPage.productionAdminLogin>.masarLoginCard{width:100%!important;max-height:none!important;margin:0!important;padding:26px 21px 22px!important;border-radius:22px!important}
+  .secureLogin.productionLogin .masarLoginCard .fleetLoginBadge,.authPage.productionAdminLogin .masarLoginCard .fleetLoginBadge{height:74px!important;max-height:74px!important;margin-bottom:16px!important}
+  .secureLogin.productionLogin .masarLoginCard h1,.authPage.productionAdminLogin .masarLoginCard h1{font-size:30px!important}
+  .secureLogin.productionLogin .masarLoginCard>p,.authPage.productionAdminLogin .masarLoginCard>p{margin-bottom:22px!important;font-size:15px!important}
+  .secureLogin.productionLogin .masarLoginCard>label,.authPage.productionAdminLogin .masarLoginCard>label{margin-bottom:15px!important}
+  .masarLoginCard .loginOptions{font-size:12px}
+  .masarLoginCard .loginRemember,.loginRecoveryLink{font-size:12px!important}
+  .masarLoginCard .loginRemember input[type=checkbox]{width:22px!important;height:22px!important;min-width:22px}
+  .masarLoginCard .loginAppLinks{gap:8px;margin-top:14px;flex-wrap:wrap}
+  .masarLoginCard .loginAppLinks .appStoreBadge{flex-basis:142px!important;width:142px!important;height:44px!important}
+  .loginAppsBlock{margin-top:22px}
+  .loginAppsHeading{gap:9px;font-size:12px}
+  .masarLoginCard .loginSupportLinks{margin-top:16px}
+  .masarLoginCard .supportLink{padding-inline:10px;font-size:12px}
+}
+@media(max-height:760px) and (min-width:901px){
+  .secureLogin.productionLogin>.masarLoginCard,.authPage.productionAdminLogin>.masarLoginCard{max-height:calc(100dvh - 24px)!important;padding-top:21px!important;padding-bottom:20px!important}
+  .secureLogin.productionLogin .masarLoginCard .fleetLoginBadge,.authPage.productionAdminLogin .masarLoginCard .fleetLoginBadge{height:68px!important;max-height:68px!important;margin-bottom:12px!important}
+  .secureLogin.productionLogin .masarLoginCard>p,.authPage.productionAdminLogin .masarLoginCard>p{margin-bottom:16px!important}
+  .secureLogin.productionLogin .masarLoginCard>label,.authPage.productionAdminLogin .masarLoginCard>label{margin-bottom:12px!important}
+  .loginAppsBlock{margin-top:15px}
+  .masarLoginCard .loginSupportLinks{margin-top:14px}
+}
+@media(prefers-reduced-motion:reduce){.loginHeroPhoto,.loginHeroRoute path,.loginHeroStatus{animation:none!important;transition:none!important}}

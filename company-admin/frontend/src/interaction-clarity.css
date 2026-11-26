@@ -1,0 +1,95 @@
+/* Show a map-control label beside only the hovered or keyboard-focused button. */
+.lockedMapPage .lockedMapControls{overflow:visible!important;max-height:none!important}
+.lockedMapPage .lockedMapControls button{position:relative!important;top:auto!important;right:auto!important;overflow:visible!important}
+.lockedMapPage .lockedMapControls button::before{content:"";position:absolute;z-index:1199;right:calc(100% + 1px);top:50%;width:8px;height:8px;box-sizing:border-box;transform:translateY(-50%) rotate(45deg);visibility:hidden;opacity:0;border-top:1px solid #d8e1e8;border-right:1px solid #d8e1e8;border-radius:1px;background:#fff;box-shadow:2px -2px 4px rgba(20,43,62,.08);pointer-events:none;transition:opacity .12s ease,visibility .12s ease}
+.lockedMapPage .lockedMapControls button::after{content:attr(data-map-label);position:absolute;z-index:1200;right:calc(100% + 8px);top:50%;transform:translateY(-50%) translateX(4px);visibility:hidden;opacity:0;pointer-events:none;white-space:nowrap;padding:6px 8px;border:1px solid #d8e1e8;border-radius:5px;background:#fff;color:#173653;box-shadow:0 3px 10px rgba(20,43,62,.14);font-size:10px;font-weight:700;line-height:1.2;transition:opacity .12s ease,transform .12s ease,visibility .12s ease}
+.lockedMapPage .lockedMapControls button:hover::before,.lockedMapPage .lockedMapControls button:focus-visible::before{visibility:visible;opacity:1;border-color:#99cbb2}
+.lockedMapPage .lockedMapControls button:hover::after,.lockedMapPage .lockedMapControls button:focus-visible::after{transform:translateY(-50%);visibility:visible;opacity:1;border-color:#99cbb2;color:#087e4a}
+/* Hide the trigger label while its anchored panel is open, even if the pointer stays over it. */
+.lockedMapPage .lockedMapControls button[aria-expanded="true"]::before,.lockedMapPage .lockedMapControls button[aria-expanded="true"]::after{visibility:hidden!important;opacity:0!important}
+
+/* Join zoom in/out as one compact vertical control group. */
+.lockedMapPage .mapZoomGroup{display:flex;flex:0 0 auto;flex-direction:column;width:44px;border:1px solid #dbe5ec;border-radius:8px;background:#fff;box-shadow:0 3px 10px rgba(25,54,76,.13)}
+.lockedMapPage .mapZoomGroup>button{width:42px!important;height:38px!important;min-height:38px!important;padding:0!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important;color:#304d6c!important}
+.lockedMapPage .mapZoomGroup>button:first-child{border-radius:7px 7px 0 0!important}
+.lockedMapPage .mapZoomGroup>button+button{border-top:1px solid #e6edf2!important;border-radius:0 0 7px 7px!important}
+
+/* Floating map panels follow their trigger and point back to it. */
+.mapAnchoredPopoverShell{position:fixed;z-index:1500;overflow:visible;pointer-events:none}
+.mapAnchoredPopoverShell::after{content:"";position:absolute;top:var(--map-pointer-y,24px);right:-7px;width:14px;height:14px;box-sizing:border-box;transform:translateY(-50%) rotate(45deg);border-top:1px solid #d8e1e8;border-right:1px solid #d8e1e8;background:#fff;box-shadow:3px -3px 5px rgba(0,0,0,.08);pointer-events:none}
+.mapAnchoredPopoverShell.opens-right::after{right:auto;left:-7px;border:0;border-bottom:1px solid #d8e1e8;border-left:1px solid #d8e1e8;box-shadow:-3px 3px 5px rgba(0,0,0,.08)}
+.mapAnchoredPopoverShell>.mapAnchoredPopover{position:relative!important;inset:auto!important;z-index:auto!important;max-height:calc(100vh - 16px)!important;max-width:calc(100vw - 24px)!important;margin:0!important;overflow-y:auto!important;pointer-events:auto;border-radius:6px!important;background:#fff!important;box-shadow:0 4px 20px rgba(0,0,0,.25)!important}
+.mapAnchoredPopoverShell>.mapAnchoredPopover.mapMoreOptions{width:280px!important;padding:16px!important}
+
+/* Vehicle clusters are circular radar markers; two staggered rings pulse outward. */
+.lockedMapPage .vehicle-cluster-marker,.dashboardVehicleMap .vehicle-cluster-marker{position:relative!important;z-index:0!important;isolation:isolate;overflow:visible!important;display:grid!important;place-items:center!important;width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important;box-sizing:border-box!important;aspect-ratio:1/1!important;border:3px solid #fff!important;border-radius:50%!important;background:#0b9955!important;color:#fff!important;box-shadow:0 4px 14px rgba(14,91,61,.35),0 0 0 5px rgba(12,163,99,.18)!important;font-size:13px!important;font-weight:800!important;line-height:1!important}
+.lockedMapPage .vehicle-cluster-marker::before,.lockedMapPage .vehicle-cluster-marker::after,.dashboardVehicleMap .vehicle-cluster-marker::before,.dashboardVehicleMap .vehicle-cluster-marker::after{content:"";position:absolute;z-index:0;inset:-6px;border:2px solid rgba(12,163,99,.68);border-radius:50%;pointer-events:none;animation:vehicleClusterRadar 2.4s ease-out infinite}
+.lockedMapPage .vehicle-cluster-marker::after,.dashboardVehicleMap .vehicle-cluster-marker::after{animation-delay:1.2s}
+.lockedMapPage .vehicle-cluster-marker>span,.dashboardVehicleMap .vehicle-cluster-marker>span{position:relative;z-index:1}
+.dashboardVehicleMap .vehicle-cluster-marker.compact{width:36px!important;min-width:36px!important;height:36px!important;min-height:36px!important;font-size:12px!important}
+@keyframes vehicleClusterRadar{0%{transform:scale(.72);opacity:.85}75%,100%{transform:scale(1.95);opacity:0}}
+
+/* Keep the unread count visible while reducing its footprint over the bell. */
+.topRight .bell i{width:18px!important;min-width:18px!important;height:18px!important;padding:0!important;font-size:8px!important;line-height:1!important}
+
+/* Dashboard map fills the space above the vehicle expiry list. */
+.dashGrid .dashboardSideStack{display:flex!important;flex-direction:column!important;gap:14px!important;min-width:0}
+.dashboardMapCard{padding:14px!important;overflow:hidden}
+.dashboardMapHeading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.dashboardMapHeading h2{margin:0;color:#0b1738;font-size:16px}
+.dashboardMapHeading p{margin:3px 0 0;color:#607a9a;font-size:12px}
+.dashboardMapFitButton{height:34px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 10px;border:1px solid #d6e2eb;border-radius:6px;background:#fff;color:#275078;font-size:11px;font-weight:700;white-space:nowrap;transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
+.dashboardMapFitButton svg{width:14px;height:14px}
+.dashboardMapFitButton:hover:not(:disabled){border-color:#94cbb0;background:#f1fbf5;color:#087e4a;box-shadow:0 2px 8px rgba(16,130,77,.12)}
+.dashboardMapFitButton:focus-visible{outline:2px solid #34b978;outline-offset:2px}
+.dashboardMapFitButton:disabled{cursor:not-allowed;opacity:.5}
+.dashboardMapCanvas{position:relative;height:560px;margin-top:12px;overflow:hidden;border-radius:8px;background:#b7d9e1}
+.dashboardMapCanvas .leaflet-container{width:100%;height:100%;font-family:inherit}
+.dashboardMapCanvas .leaflet-control-attribution{font-size:9px}
+.dashboardVehicleMap .leaflet-control-zoom{margin:12px!important;overflow:hidden;border:1px solid #dbe5ee!important;border-radius:8px!important;background:#fff;box-shadow:0 3px 10px rgba(25,54,76,.16)!important}
+.dashboardVehicleMap .leaflet-control-zoom a{width:36px!important;height:36px!important;line-height:36px!important;border:0!important;background:#fff!important;color:#284d70!important;font-size:20px!important;font-weight:600!important}
+.dashboardVehicleMap .leaflet-control-zoom a+a{border-top:1px solid #e5edf2!important}
+.dashboardVehicleMap .leaflet-control-zoom a:hover{background:#f1fbf5!important;color:#087e4a!important}
+.dashboardMapEmpty{position:absolute;z-index:700;inset:0;display:grid;place-items:center;padding:16px;background:rgba(241,247,250,.48);color:#304d72;font-size:13px;font-weight:600;pointer-events:none}
+
+@media(max-height:560px){
+  .lockedMapPage .lockedMapControls{max-height:calc(100% - 78px)!important;overflow-y:auto!important;overflow-x:visible!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .lockedMapPage .vehicle-cluster-marker::before,.lockedMapPage .vehicle-cluster-marker::after,.dashboardVehicleMap .vehicle-cluster-marker::before,.dashboardVehicleMap .vehicle-cluster-marker::after{animation:none!important;opacity:.32;transform:scale(1.18)}
+}
+
+@media(max-width:600px){
+  .dashboardMapCanvas{height:360px}
+  .dashboardMapFitButton{width:36px;padding:0;font-size:0}
+  .dashboardMapFitButton svg{width:16px;height:16px}
+}
+
+@media(min-width:1500px){
+  .dashGrid{grid-template-columns:minmax(390px,.78fr) minmax(700px,1.4fr)!important;align-items:start!important}
+  .dashGrid>.statusCard{padding:12px!important;align-self:start!important}
+  .dashGrid>.statusCard .donutWrap{grid-template-columns:minmax(170px,190px) minmax(0,1fr)!important;gap:12px;padding:14px 8px 8px!important}
+  .dashGrid>.statusCard .statusDonut{width:180px!important;height:180px!important}
+  .dashGrid>.statusCard .statusDonutCenter{inset:25px!important}
+  .dashGrid>.statusCard .statusDonutCenter strong{font-size:28px!important}
+  .dashGrid>.statusCard .legend{min-width:0!important}
+  .dashGrid>.statusCard .legend>div{min-height:52px!important;padding:7px 0!important;gap:8px!important}
+  .dashGrid>.statusCard .legend>div>span small{font-size:10px!important}
+  .dashGrid>.statusCard .legend>div>strong{font-size:15px!important}
+  .dashboardMapCanvas{height:clamp(520px,72vh,760px)!important}
+}
+
+/* One slow-pulsing status dot replaces the engine glyph in each map card. */
+.lockedMapPage .mapVehicleRow[data-state=moving]{--map-vehicle-status:#10b981}
+.lockedMapPage .mapVehicleRow[data-state=idle]{--map-vehicle-status:#f59e0b}
+.lockedMapPage .mapVehicleRow[data-state=parked]{--map-vehicle-status:#0877f9}
+.lockedMapPage .mapVehicleRow[data-state=offline],.lockedMapPage .mapVehicleRow[data-state=expired],.lockedMapPage .mapVehicleRow[data-state=untracked]{--map-vehicle-status:#ef4444}
+.lockedMapPage .mapVehicleRow[data-state=never]{--map-vehicle-status:#94a3b8}
+.lockedMapPage .mapVehicleSignals .mapVehicleStatusDot{position:relative!important;display:inline-block!important;width:16px!important;height:16px!important;min-width:16px!important;min-height:16px!important;flex:0 0 16px!important;border:0!important;border-radius:50%!important;background:var(--map-vehicle-status,#94a3b8)!important;color:var(--map-vehicle-status,#94a3b8)!important}
+.lockedMapPage .mapVehicleSignals .mapVehicleStatusDot::after{content:"";position:absolute;inset:-2px;border:1.5px solid currentColor;border-radius:50%;opacity:0;pointer-events:none}
+@keyframes mapVehicleStatusPulse{0%{transform:scale(.85);opacity:.42}100%{transform:scale(1.9);opacity:0}}
+@media(prefers-reduced-motion:no-preference){.lockedMapPage .mapVehicleSignals .mapVehicleStatusDot::after{animation:mapVehicleStatusPulse 2.8s ease-out infinite}}
+
+/* Match the sidebar Alerts count to the compact circular top-bell badge. */
+.side nav button em.alertCountBadge{display:grid!important;place-items:center!important;width:18px!important;min-width:18px!important;max-width:18px!important;height:18px!important;min-height:18px!important;padding:0!important;border-radius:50%!important;font-size:8px!important;line-height:1!important;flex:0 0 18px!important}

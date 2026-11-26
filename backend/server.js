@@ -22,8 +22,9 @@ import {resolveLivePosition} from './live-position.mjs';
 import {createGoogleGeocoder,geocodeCacheKey,readableAddress,validGeocodeCoordinates} from './google-geocoding.mjs';
 import {normalizeMapAccess,availableMaps,defaultBaseMap,mapAccessDefinitions} from './map-access.mjs';
 import {normalizeCommandRequest,companyUserCanAccessVehicle,commandPermissionGranted,immobilizerPermissionGranted,CommandValidationError} from './command-policy.mjs';
-import {preparePlatformSettingsPatch,PlatformSettingsValidationError} from './platform-settings.mjs';
+import {preparePlatformSettingsPatch,PlatformSettingsValidationError,redactPlatformSettings} from './platform-settings.mjs';
 import {prepareCompanySettingsPatch,prepareLegacyCompanySettingsPatch,CompanySettingsValidationError} from './company-settings.mjs';
+import {boundedInteger,consumeLoginAttempt,LOGIN_ATTEMPT_LIMIT_MESSAGE,logLoginFailure,parseAllowedOrigins,pruneLoginAttemptWindows,redactSensitiveData,sessionDays} from './security-controls.mjs';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -36,39 +37,30 @@ import {promisify} from 'node:util';
 dotenv.config();
 const { Pool } = pg;
 const app = express();
-app.get('/api/public/branding',async(_req,res)=>{try{const r=await pool.query('SELECT data FROM platform_state WHERE id=1');const s=r.rows[0]?.data?.settings||{},hasBackground=String(s.loginBackgroundData||'').startsWith('data:image/'),transparency=Math.max(0,Math.min(70,Number(s.loginPanelTransparency??18)));res.set('Cache-Control','no-store').json({logoData:s.loginLogoData||s.brandLogoData||'',collapsedLogoData:s.collapsedLogoData||'',faviconData:s.faviconData||'',loginBackgroundData:'',loginBackgroundUrl:hasBackground?'/inviha-api/api/public/login-background':'',loginPanelTransparency:transparency,templateColor:s.templateColor||'#0aa65f',loginTextColor:s.loginTextColor||'#0b2748',loginBackgroundColor:s.loginBackgroundColor||'#f4f8fb',loginPanelColor:s.loginPanelColor||'#ffffff',welcomeText:s.welcomeText||'Welcome to MASAR TRACK',bottomText:s.bottomText||'2026 © INVIHA Technologies',portalTitle:s.portalTitle||'Fleet Management',companyBrowserTitle:s.companyBrowserTitle||'Fleet Management',googlePlayUrl:s.googlePlayUrl||'',appStoreUrl:s.appStoreUrl||'',supportEmail:s.supportEmail||'',supportPhone:s.supportPhone||'',whatsappNumber:s.whatsappNumber||'',timezone:s.timezone||'Asia/Qatar',dateFormat:s.dateFormat||'DD-MM-YYYY',timeFormat:s.timeFormat||'24h',captchaProvider:s.captchaProvider&&s.captchaProvider!=='None'&&s.captchaSiteKey&&s.captchaSecretKey?s.captchaProvider:'None',captchaSiteKey:s.captchaProvider&&s.captchaProvider!=='None'&&s.captchaSecretKey?String(s.captchaSiteKey||''):''})}catch{res.status(503).json({error:'branding_unavailable'})}});
-app.get('/api/public/login-background',async(req,res)=>{try{const r=await pool.query('SELECT data FROM platform_state WHERE id=1'),value=String(r.rows[0]?.data?.settings?.loginBackgroundData||''),match=/^data:(image\/(?:png|jpeg|webp|svg\+xml));base64,([A-Za-z0-9+/=\s]+)$/.exec(value);if(!match)return res.status(204).set('Cache-Control','no-store').end();const body=Buffer.from(match[2].replace(/\s/g,''),'base64'),etag='"'+crypto.createHash('sha256').update(body).digest('hex')+'"';res.set({'Cache-Control':'public,max-age=0,must-revalidate','ETag':etag,'Content-Type':match[1],'X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin'});if(req.headers['if-none-match']===etag)return res.status(304).end();res.send(body)}catch{res.status(503).set('Cache-Control','no-store').end()}});
-// Browser access is restricted to the portals we control. Native tracker and
-// mobile clients do not send an Origin header, so this does not block them.
-const configuredOrigins=String(process.env.ALLOWED_ORIGINS||'https://track.inviha.com,https://admin.inviha.com,https://vehicletracking.effy.qa,http://localhost:5173,http://localhost:4173')
-  .split(',').map(value=>value.trim()).filter(Boolean);
-const allowedOrigins=new Set(configuredOrigins);
-app.use(cors({origin(origin,callback){
-  if(!origin||allowedOrigins.has('*')||allowedOrigins.has(origin))return callback(null,true);
-  return callback(new Error('origin_not_allowed'));
-},credentials:false}));
-app.use(express.json({ limit: '8mb' }));
-
-const PORT = Number(process.env.PORT || 3001);
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const livePool = process.env.TRACCAR_DATABASE_URL ? new Pool({ connectionString: process.env.TRACCAR_DATABASE_URL }) : null;
-const OFFLINE_MINUTES = Number(process.env.OFFLINE_MINUTES || 10);
-const execFileAsync=promisify(execFile);
-
 app.set('trust proxy','loopback');
 if(typeof app.disable==='function')app.disable('x-powered-by');
+const allowedOrigins=parseAllowedOrigins(process.env.ALLOWED_ORIGINS,'https://track.almasar.qa,https://admin.almasar.qa,https://track.inviha.com,https://admin.inviha.com,https://vehicletracking.effy.qa,http://localhost:5173,http://localhost:4173,http://localhost:5177,http://localhost:5178');
+if(String(process.env.ALLOWED_ORIGINS||'').split(',').some(origin=>origin.trim()==='*'))console.warn('Ignoring wildcard ALLOWED_ORIGINS; configure explicit portal origins.');
+app.use(cors({origin(origin,callback){callback(null,!origin||allowedOrigins.has(origin))},credentials:false}));
+app.use(express.json({limit:'8mb',strict:true}));
 app.use((req,res,next)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('X-Frame-Options','DENY');
   res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=(self)');
-  if(req.path.startsWith('/api/')){
-    res.setHeader('Cache-Control','no-store');
-    res.setHeader('Pragma','no-cache');
-  }
-  if(process.env.ENABLE_HSTS==='true')res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');
+  res.setHeader('Content-Security-Policy',"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  if(req.path.startsWith('/api/')){res.setHeader('Cache-Control','no-store');res.setHeader('Pragma','no-cache')}
+  if(req.secure&&(process.env.NODE_ENV==='production'||process.env.ENABLE_HSTS==='true'))res.setHeader('Strict-Transport-Security','max-age=31536000');
   next();
 });
+app.get('/api/public/branding',async(_req,res)=>{try{const r=await pool.query('SELECT data FROM platform_state WHERE id=1');const s=r.rows[0]?.data?.settings||{},hasBackground=/^data:image\/(?:png|jpeg|webp);base64,/i.test(String(s.loginBackgroundData||'')),transparency=Math.max(0,Math.min(70,Number(s.loginPanelTransparency??18)));res.set('Cache-Control','no-store').json({logoData:s.loginLogoData||s.brandLogoData||'',collapsedLogoData:s.collapsedLogoData||'',faviconData:s.faviconData||'',loginBackgroundData:'',loginBackgroundUrl:hasBackground?'/inviha-api/api/public/login-background':'',loginPanelTransparency:transparency,templateColor:s.templateColor||'#0aa65f',loginTextColor:s.loginTextColor||'#0b2748',loginBackgroundColor:s.loginBackgroundColor||'#f4f8fb',loginPanelColor:s.loginPanelColor||'#ffffff',welcomeText:s.welcomeText||'Welcome to MASAR TRACK',bottomText:s.bottomText||'2026 © INVIHA Technologies',portalTitle:s.portalTitle||'Fleet Management',companyBrowserTitle:s.companyBrowserTitle||'Fleet Management',googlePlayUrl:s.googlePlayUrl||'',appStoreUrl:s.appStoreUrl||'',supportEmail:s.supportEmail||'',supportPhone:s.supportPhone||'',whatsappNumber:s.whatsappNumber||'',timezone:s.timezone||'Asia/Qatar',dateFormat:s.dateFormat||'DD-MM-YYYY',timeFormat:s.timeFormat||'24h',captchaProvider:s.captchaProvider&&s.captchaProvider!=='None'&&s.captchaSiteKey&&s.captchaSecretKey?s.captchaProvider:'None',captchaSiteKey:s.captchaProvider&&s.captchaProvider!=='None'&&s.captchaSecretKey?String(s.captchaSiteKey||''):''})}catch{res.status(503).json({error:'branding_unavailable'})}});
+app.get('/api/public/login-background',async(req,res)=>{try{const r=await pool.query('SELECT data FROM platform_state WHERE id=1'),value=String(r.rows[0]?.data?.settings?.loginBackgroundData||''),match=/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(value);if(!match)return res.status(204).set('Cache-Control','no-store').end();const body=Buffer.from(match[2].replace(/\s/g,''),'base64'),etag='"'+crypto.createHash('sha256').update(body).digest('hex')+'"';res.set({'Cache-Control':'public,max-age=0,must-revalidate','ETag':etag,'Content-Type':match[1],'X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin'});if(req.headers['if-none-match']===etag)return res.status(304).end();res.send(body)}catch{res.status(503).set('Cache-Control','no-store').end()}});
+const PORT = boundedInteger(process.env.PORT,3001,1,65535);
+const pool = new Pool({connectionString:process.env.DATABASE_URL,max:boundedInteger(process.env.DB_POOL_MAX,10,1,100),idleTimeoutMillis:30000,connectionTimeoutMillis:5000});
+const livePool = process.env.TRACCAR_DATABASE_URL ? new Pool({connectionString:process.env.TRACCAR_DATABASE_URL,max:boundedInteger(process.env.TRACCAR_DB_POOL_MAX,4,1,50),idleTimeoutMillis:30000,connectionTimeoutMillis:5000}) : null;
+const OFFLINE_MINUTES = boundedInteger(process.env.OFFLINE_MINUTES,10,1,525600);
+const execFileAsync=promisify(execFile);
+
 app.use((req,res,next)=>{
   if(!req.path.startsWith('/api/')||req.path==='/api/auth/login'||req.path==='/api/auth/setup-status')return next();
   let responseError='';
@@ -87,23 +79,8 @@ app.use((req,res,next)=>{
   next();
 });
 
-const SESSION_DAYS = Number(process.env.SESSION_DAYS || 7);
-const LOGIN_WINDOW_MS=15*60*1000;
-const LOGIN_MAX_FAILURES=8;
-const loginFailures=new Map();
-const loginKey=(req,email)=>`${req.ip||'unknown'}:${String(email||'').toLowerCase()}`;
-const pruneLoginFailures=now=>{for(const [key,value] of loginFailures)if(value.resetAt<=now)loginFailures.delete(key)};
-const loginBlocked=(req,email)=>{
-  const now=Date.now();pruneLoginFailures(now);const value=loginFailures.get(loginKey(req,email));
-  return Boolean(value&&value.failures>=LOGIN_MAX_FAILURES&&value.resetAt>now);
-};
-const recordLoginFailure=(req,email)=>{
-  const now=Date.now(),key=loginKey(req,email),value=loginFailures.get(key);
-  if(!value||value.resetAt<=now)loginFailures.set(key,{failures:1,resetAt:now+LOGIN_WINDOW_MS});
-  else value.failures+=1;
-};
-const clearLoginFailures=(req,email)=>loginFailures.delete(loginKey(req,email));
-const TRACKER_PORT = Number(process.env.TRACKER_PORT || 5023);
+const SESSION_DAYS = sessionDays(process.env.SESSION_DAYS);
+const TRACKER_PORT = boundedInteger(process.env.TRACKER_PORT,5023,1,65535);
 const tokenHash = token => crypto.createHash('sha256').update(String(token||'')).digest('hex');
 const hashPassword = (password, salt=crypto.randomBytes(16).toString('hex')) => {
   const hash=crypto.scryptSync(String(password),salt,64).toString('hex'); return `${salt}:${hash}`;
@@ -213,17 +190,18 @@ async function verifyLoginCaptcha(token,remoteIp){
 }
 app.post('/api/auth/login', async (req,res)=>{
   try{
-    const email=cleanString(req.body.email).toLowerCase(),password=String(req.body.password||'');
-    if(loginBlocked(req,email)){
-      res.set('Retry-After',String(Math.ceil(LOGIN_WINDOW_MS/1000)));
-      return res.status(429).json({error:'too_many_login_attempts',message:'Too many failed sign-in attempts. Try again later.'});
+    const email=cleanString(req.body?.email).toLowerCase(),password=String(req.body?.password||'');
+    const attempt=await consumeLoginAttempt(pool,email);
+    if(!attempt.allowed){
+      logLoginFailure(req,email,'rate_limited');
+      res.set('Retry-After',String(attempt.retryAfterSeconds));
+      return res.status(429).json({error:'too_many_login_attempts',message:LOGIN_ATTEMPT_LIMIT_MESSAGE});
     }
-    if(!await verifyLoginCaptcha(req.body.captchaToken,req.ip)){recordLoginFailure(req,email);return res.status(403).json({error:'captcha_required',message:'Complete the security check and try again.'})}
+    if(!await verifyLoginCaptcha(req.body?.captchaToken,req.ip)){logLoginFailure(req,email,'captcha_failed');return res.status(403).json({error:'captcha_required',message:'Complete the security check and try again.'})}
     const {rows}=await pool.query('SELECT * FROM auth_users WHERE lower(email)=lower($1) LIMIT 1',[email]); const u=rows[0];
-    if(!u||!verifyPassword(password,u.password_hash)){recordLoginFailure(req,email);return res.status(401).json({error:'invalid_credentials'});}
+    if(!u||!verifyPassword(password,u.password_hash)){logLoginFailure(req,email,'invalid_credentials');return res.status(401).json({error:'invalid_credentials'});}
     if(String(u.status).toLowerCase()!=='active')return res.status(403).json({error:'account_disabled'});
     if(u.role==='school_admin'||u.metadata?.schoolAdmin===true)return res.status(403).json({error:'school_portal_login_required',message:'Use the School Bus sign-in page for this account.'});
-    clearLoginFailures(req,email);
     const assigned=(await pool.query('SELECT app_role FROM auth_user_app_roles WHERE user_id=$1 ORDER BY app_role',[u.id])).rows.map(row=>row.app_role);
     const activeRole=defaultAppRole(u.role,assigned);if(!activeRole)return res.status(403).json({error:'no_app_role_assigned'});
     const expires=new Date(Date.now()+SESSION_DAYS*86400000),token=crypto.randomBytes(32).toString('hex');
@@ -302,15 +280,18 @@ app.post('/api/news',requireAuth,requireSuper,async(req,res)=>{
   try{
     const kind=['announcement','image','service'].includes(req.body.kind)?req.body.kind:'announcement';
     const heading=cleanString(req.body.heading),description=cleanString(req.body.description),displayName=cleanString(req.body.displayName),slideText=cleanString(req.body.slideText),imageData=cleanString(req.body.imageData),imageUrl=cleanString(req.body.imageUrl),audience=['all','company','user'].includes(req.body.audience)?req.body.audience:'all';
-    if(imageData.length>2500000)return res.status(400).json({error:'Image is too large. Choose an image smaller than 2 MB.'});
+    if(heading.length>200||description.length>3000||displayName.length>200||slideText.length>2000)return res.status(400).json({error:'News text is too long.'});
+    if(imageData){const match=/^data:image\/(png|jpeg|webp);base64,((?:[A-Za-z0-9+/]{4})+(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)$/.exec(imageData);if(!match)return res.status(400).json({error:'Use a PNG, JPEG or WebP image.'});const bytes=Buffer.from(match[2],'base64');if(bytes.length>2_000_000||bytes.toString('base64')!==match[2])return res.status(400).json({error:'Image is too large or invalid. Choose an image smaller than 2 MB.'});}
+    if(imageUrl){if(imageUrl.length>2048)return res.status(400).json({error:'Image URL is too long.'});try{const url=new URL(imageUrl);if(url.username||url.password||!(url.protocol==='https:'||process.env.NODE_ENV!=='production'&&url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))throw Error()}catch{return res.status(400).json({error:'Use a valid HTTPS image URL.'})}}
     if(kind==='image'&&!imageData&&!imageUrl)return res.status(400).json({error:'Choose an image or provide an image URL.'});
     if(kind!=='image'&&(!heading||!description))return res.status(400).json({error:'Heading and description are required for this message type.'});
     const companyId=audience==='company'&&Number.isSafeInteger(Number(req.body.companyId))?Number(req.body.companyId):null;
     const userId=audience==='user'&&Number.isSafeInteger(Number(req.body.userId))?Number(req.body.userId):null;
     if(audience==='company'&&!companyId)return res.status(400).json({error:'Choose a company.'});
     if(audience==='user'&&!userId)return res.status(400).json({error:'Choose a user.'});
-    const startsAt=req.body.startsAt?new Date(req.body.startsAt).toISOString():new Date().toISOString();
-    const expiresAt=req.body.expiresAt?new Date(req.body.expiresAt).toISOString():null;
+    const startsDate=req.body.startsAt?new Date(req.body.startsAt):new Date(),expiresDate=req.body.expiresAt?new Date(req.body.expiresAt):null;
+    if(!Number.isFinite(startsDate.getTime())||expiresDate&&!Number.isFinite(expiresDate.getTime()))return res.status(400).json({error:'Use valid start and expiry dates.'});
+    const startsAt=startsDate.toISOString(),expiresAt=expiresDate?.toISOString()||null;
     if(expiresAt&&Date.parse(expiresAt)<=Date.parse(startsAt))return res.status(400).json({error:'Expiry must be after the start time.'});
     const current=await readNewsState(),news=Array.isArray(current.data.newsUpdates)?current.data.newsUpdates:[];
     const item={id:crypto.randomUUID(),kind,heading,description,displayName:displayName||null,slideText:slideText||null,imageData:imageData||null,imageUrl:imageUrl||null,audience,companyId,userId,startsAt,expiresAt,createdAt:new Date().toISOString(),createdBy:Number(req.user.id),readBy:[]};
@@ -342,7 +323,7 @@ app.post('/api/news/:id/read',requireAuth,async(req,res)=>{
 });
 app.post('/api/auth/logout',requireAuth,async(req,res)=>{try{const token=String(req.headers.authorization||'').replace(/^Bearer\s+/,'');await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1',[tokenHash(token)]);res.json({ok:true})}catch{res.json({ok:true})}});
 app.post('/api/auth/change-password',requireAuth,async(req,res)=>{const client=await pool.connect();try{const p=String(req.body.password||'');if(p.length<12)return res.status(400).json({error:'password_too_short',message:'Use a password of at least 12 characters.'});const currentHash=tokenHash(String(req.headers.authorization||'').replace(/^Bearer\s+/,''));await client.query('BEGIN');await client.query('UPDATE auth_users SET password_hash=$1,updated_at=NOW() WHERE id=$2',[hashPassword(p),req.user.id]);await client.query('DELETE FROM auth_sessions WHERE user_id=$1 AND token_hash<>$2',[req.user.id,currentHash]);await client.query('COMMIT');res.json({ok:true,otherSessionsRevoked:true})}catch(e){try{await client.query('ROLLBACK')}catch{}console.error(e);res.status(500).json({error:'password_change_failed'})}finally{client.release()}});
-app.get('/api/company/me',requireAuth,async(req,res)=>{try{if(!req.user.company_id)return res.json(null);const {rows}=await pool.query('SELECT id,name,email,status,metadata FROM companies WHERE id=$1',[req.user.company_id]);res.json(rows[0]||null)}catch(e){res.status(500).json({error:'company_failed'})}});
+app.get('/api/company/me',requireAuth,async(req,res)=>{try{if(!req.user.company_id)return res.json(null);const {rows}=await pool.query('SELECT id,name,email,status,metadata FROM companies WHERE id=$1',[req.user.company_id]);res.json(redactSensitiveData(rows[0]||null))}catch(e){res.status(500).json({error:'company_failed'})}});
 
 app.post('/api/companies/:id/support-login',requireAuth,requireSuper,async(req,res)=>{
  try {
@@ -392,7 +373,7 @@ app.get('/api/system/metrics',requireAuth,requireSuper,async(req,res)=>{
 });
 
 // INVIHA_MAP_CONFIG_V1
-app.get('/api/map-config',requireAuth,async(req,res)=>{try{const r=await pool.query('SELECT data FROM platform_state WHERE id=1');const s=r.rows[0]?.data?.settings||{},userAllowed=normalizeMapAccess(req.user?.metadata?.mapAccess),globalAllowed=normalizeMapAccess(s.enabledMaps),allowed=Object.fromEntries([...mapAccessDefinitions.map(([key])=>[key,userAllowed[key]&&globalAllowed[key]]),['mapillary',userAllowed.mapillary&&globalAllowed.mapillary]]),maps=availableMaps(allowed,s),defaultBase=defaultBaseMap(s,allowed,String(req.user?.metadata?.defaultBaseMap||'')),mapillaryAllowed=allowed.mapillary;res.set('Cache-Control','private,no-store').json({provider:'Tile Map',mapillaryToken:mapillaryAllowed?String(s.mapillaryAccessToken||''):'',allowed,maps,defaultBase,center:{latitude:Number(s.mapCenterLatitude)||25.2854,longitude:Number(s.mapCenterLongitude)||51.5310},zoom:Math.max(2,Math.min(20,Number(s.mapZoom)||11)),dateFormat:s.dateFormat||'DD-MM-YYYY',timeFormat:s.timeFormat||'24h',timezone:s.timezone||'Asia/Qatar'})}catch{res.status(503).json({error:'Map settings unavailable.'})}});
+app.get('/api/map-config',requireAuth,async(req,res)=>{try{const r=await pool.query('SELECT data FROM platform_state WHERE id=1');const s=r.rows[0]?.data?.settings||{},userAllowed=normalizeMapAccess(req.user?.metadata?.mapAccess),globalAllowed=normalizeMapAccess(s.enabledMaps),allowed=Object.fromEntries([...mapAccessDefinitions.map(([key])=>[key,userAllowed[key]&&globalAllowed[key]]),['mapillary',userAllowed.mapillary&&globalAllowed.mapillary]]);allowed.googleRoad=false;allowed.googleSatellite=false;allowed.googleHybrid=false;const maps=availableMaps(allowed,s),defaultBase=defaultBaseMap(s,allowed,String(req.user?.metadata?.defaultBaseMap||''));res.set('Cache-Control','private,no-store').json({provider:'Tile Map',allowed,maps,defaultBase,center:{latitude:Number(s.mapCenterLatitude)||25.2854,longitude:Number(s.mapCenterLongitude)||51.5310},zoom:Math.max(2,Math.min(20,Number(s.mapZoom)||11)),dateFormat:s.dateFormat||'DD-MM-YYYY',timeFormat:s.timeFormat||'24h',timezone:s.timezone||'Asia/Qatar'})}catch{res.status(503).json({error:'Map settings unavailable.'})}});
 app.get('/api/geocode/reverse',requireAuth,async(req,res)=>{
  try{const latitude=Number(req.query.latitude),longitude=Number(req.query.longitude);if(!validGeocodeCoordinates(latitude,longitude))return res.status(400).json({error:'invalid_coordinates'});const result=await reverseGeocoder.reverseDetailed(latitude,longitude);res.set('Cache-Control','private,no-store').json(result)}catch(error){const code=String(error.message||'geocoding_unavailable');const status=code.includes('key_missing')||code==='geocoder_not_configured'?503:code==='address_not_found'?404:502;res.status(status).json({error:code})}
 });
@@ -453,12 +434,12 @@ app.post('/api/companies', requireAuth, requireSuper, async (req,res)=>{
   const client=await pool.connect();
   try {
     const name=cleanString(req.body.name), email=cleanString(req.body.email).toLowerCase();
-    const adminName=cleanString(req.body.adminName)||`${name} Admin`, password=String(req.body.password||'');
+    const adminName=cleanString(req.body.adminName)||`${name} Admin`, suppliedPassword=String(req.body.password||''), password=suppliedPassword||crypto.randomBytes(32).toString('base64url');
     let metadata;try{metadata=companyDates(cleanMetadata(req.body.metadata))}catch(e){return res.status(400).json({error:e.message})}
     const fieldIssue=validateCompanyFields({...metadata,name,email,temporaryPassword:password},{creating:true});if(fieldIssue)return res.status(400).json({error:fieldIssue.message});metadata.requiredFields=companyRequiredFields(metadata.requiredFields);
     if(!name) return res.status(400).json({error:'company_name_required'});
     if(!email) return res.status(400).json({error:'admin_email_required'});
-    if(password.length<8) return res.status(400).json({error:'password_minimum_8_characters'});
+    if(suppliedPassword&&password.length<4) return res.status(400).json({error:'password_minimum_4_characters'});
     await client.query('BEGIN');
     const exists=await client.query('SELECT id FROM companies WHERE lower(name)=lower($1)',[name]);
     if(exists.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'company_already_exists'});}
@@ -466,7 +447,7 @@ app.post('/api/companies', requireAuth, requireSuper, async (req,res)=>{
     if(emailExists.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'email_already_registered'});}
     const {rows}=await client.query(`INSERT INTO companies(name,email,status) VALUES($1,$2,$3) RETURNING id,name,email,status`,[name,email,req.body.status==='suspended'?'suspended':'active']);
     const company=rows[0];
-    const u=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status) VALUES($1,$2,$3,$4,'company_admin','active') RETURNING id,name,email,role,status`,[company.id,adminName,email,hashPassword(password)]);
+    const adminMapAccess=normalizeMapAccess(req.body.adminMapAccess||{});if(!mapAccessDefinitions.some(([key])=>adminMapAccess[key])){await client.query('ROLLBACK');return res.status(400).json({error:'at_least_one_base_map_required'});}const u=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status,metadata) VALUES($1,$2,$3,$4,'company_admin','active',$5::jsonb) RETURNING id,name,email,role,status`,[company.id,adminName,email,hashPassword(password),JSON.stringify({mapAccess:adminMapAccess})]);
     await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[u.rows[0].id,req.user.id]);
     await client.query(`INSERT INTO company_state(company_id,data,updated_by) VALUES($1,$2::jsonb,$3) ON CONFLICT(company_id) DO NOTHING`,[company.id,JSON.stringify({}),req.user.id]);
     await client.query(`INSERT INTO audit_events(company_id,user_id,action,entity_type,entity_id,detail) VALUES($1,$2,'company_created','company',$3,$4::jsonb)`,[company.id,req.user.id,String(company.id),JSON.stringify({name,email})]);
@@ -486,12 +467,12 @@ app.put('/api/companies/:id', requireAuth, requireSuper, async (req,res)=>{
     if(!rows[0]){await client.query('ROLLBACK');return res.status(404).json({error:'company_not_found'});}
     const au=await client.query(`SELECT id FROM auth_users WHERE company_id=$1 AND role='company_admin' ORDER BY id LIMIT 1`,[id]);
     if(au.rowCount){
-      if(password && password.length<8){await client.query('ROLLBACK');return res.status(400).json({error:'password_minimum_8_characters'});}
+      if(password && password.length<4){await client.query('ROLLBACK');return res.status(400).json({error:'password_minimum_4_characters'});}
       if(password)await client.query('DELETE FROM auth_sessions WHERE user_id=$1',[au.rows[0].id]);
       if(password) await client.query(`UPDATE auth_users SET name=$1,email=$2,password_hash=$3,status=$4,updated_at=NOW() WHERE id=$5`,[adminName,email,hashPassword(password),String(req.body.status||'active').toLowerCase()==='active'?'active':'disabled',au.rows[0].id]);
       else await client.query(`UPDATE auth_users SET name=$1,email=$2,status=$3,updated_at=NOW() WHERE id=$4`,[adminName,email,String(req.body.status||'active').toLowerCase()==='active'?'active':'disabled',au.rows[0].id]);
     } else {
-      if(password.length<8){await client.query('ROLLBACK');return res.status(400).json({error:'password_required_for_company_admin'});}
+      if(password.length<4){await client.query('ROLLBACK');return res.status(400).json({error:'password_required_for_company_admin'});}
       const created=await client.query(`INSERT INTO auth_users(company_id,name,email,password_hash,role,status) VALUES($1,$2,$3,$4,'company_admin','active') RETURNING id`,[id,adminName,email,hashPassword(password)]);
       await client.query("INSERT INTO auth_user_app_roles(user_id,app_role,granted_by) VALUES($1,'fleet',$2) ON CONFLICT DO NOTHING",[created.rows[0].id,req.user.id]);
     }
@@ -501,7 +482,7 @@ app.put('/api/companies/:id', requireAuth, requireSuper, async (req,res)=>{
 });
 app.get('/api/company/state',requireAuth,async(req,res)=>{
   if(!req.user.company_id)return res.status(403).json({error:'company_required'});
-  try{const {rows}=await pool.query('SELECT data,version,updated_at FROM company_state WHERE company_id=$1',[req.user.company_id]);const result=rows[0]||{data:{},version:0,updated_at:null};const data={...result.data};if(data.alerts)data.alerts=dedupeAlertEvents(recentAlerts(data.alerts),req.user.company_id);if(data.alertRules)data.alertRules=normalizeAlertRules(data.alertRules);delete data.users;const count=await pool.query('SELECT COUNT(*)::int AS n FROM auth_users WHERE company_id=$1',[req.user.company_id]);const brandingRow=await pool.query('SELECT data FROM platform_state WHERE id=1');const platformData=brandingRow.rows[0]?.data||{};const settings=platformData.settings||{};const headerBanners=Array.isArray(platformData.headerBanners)?platformData.headerBanners:[];const headerBanner=headerBanners.find(x=>x&&x.companyId!=null&&String(x.companyId)===String(req.user.company_id))||headerBanners.find(x=>x&&x.companyId==null)||null;res.json({...result,data,userCount:count.rows[0]?.n||0,headerBanner,branding:{logoData:settings.brandLogoData||'',collapsedLogoData:settings.collapsedLogoData||'',faviconData:settings.faviconData||'',portalTitle:settings.portalTitle||'Fleet Management',companyBrowserTitle:settings.companyBrowserTitle||'Fleet Management',timezone:settings.timezone||'Asia/Qatar',dateFormat:settings.dateFormat||'DD-MM-YYYY',timeFormat:settings.timeFormat||'24h'}})}catch(e){console.error(e);res.status(500).json({error:'company_state_failed'})}
+  try{const {rows}=await pool.query('SELECT data,version,updated_at FROM company_state WHERE company_id=$1',[req.user.company_id]);const result=rows[0]||{data:{},version:0,updated_at:null};const data={...result.data};if(data.alerts)data.alerts=dedupeAlertEvents(recentAlerts(data.alerts),req.user.company_id);if(data.alertRules)data.alertRules=normalizeAlertRules(data.alertRules);delete data.users;const count=await pool.query('SELECT COUNT(*)::int AS n FROM auth_users WHERE company_id=$1',[req.user.company_id]);const brandingRow=await pool.query('SELECT data FROM platform_state WHERE id=1');const platformData=brandingRow.rows[0]?.data||{};const settings=platformData.settings||{};const headerBanners=Array.isArray(platformData.headerBanners)?platformData.headerBanners:[];const headerBanner=headerBanners.find(x=>x&&x.companyId!=null&&String(x.companyId)===String(req.user.company_id))||headerBanners.find(x=>x&&x.companyId==null)||null;res.json({...result,data:redactSensitiveData(data),userCount:count.rows[0]?.n||0,headerBanner:redactSensitiveData(headerBanner),branding:{logoData:settings.brandLogoData||'',collapsedLogoData:settings.collapsedLogoData||'',faviconData:settings.faviconData||'',portalTitle:settings.portalTitle||'Fleet Management',companyBrowserTitle:settings.companyBrowserTitle||'Fleet Management',timezone:settings.timezone||'Asia/Qatar',dateFormat:settings.dateFormat||'DD-MM-YYYY',timeFormat:settings.timeFormat||'24h'}})}catch(e){console.error(e);res.status(500).json({error:'company_state_failed'})}
 });
 app.patch('/api/company/settings',requireAuth,async(req,res)=>{
  if(req.user.role!=='company_admin'||!req.user.company_id)return res.status(403).json({error:'company_admin_required',message:'Company administrator access required.'});
@@ -672,11 +653,11 @@ async function vehicleSnapshotFor(user){
   });
   const cachedAddresses=await reverseGeocoder.cachedMany(snapshots);
   return Promise.all(snapshots.map(async snapshot=>{
-    if(snapshot.expired||!validGeocodeCoordinates(snapshot.latitude,snapshot.longitude))return snapshot;
+    if(snapshot.expired||!validGeocodeCoordinates(snapshot.latitude,snapshot.longitude))return redactSensitiveData(snapshot);
     const address=cachedAddresses.get(geocodeCacheKey(snapshot.latitude,snapshot.longitude))||null;
     const stoppedSince=Number(snapshot.telemetry?.stoppedSince||0),settled=stoppedSince>0&&Date.now()-stoppedSince>=30000;
     if(!address&&settled)reverseGeocoder.reverse(snapshot.latitude,snapshot.longitude).then(()=>driverUpdates.emit('changed',snapshot.company_id)).catch(()=>{});
-    return {...snapshot,address:address||null};
+    return redactSensitiveData({...snapshot,address:address||null});
   }));
 }
 
@@ -701,7 +682,8 @@ app.put('/api/vehicles/:id/image', requireAuth, async(req,res)=>{
  if(!['company_admin','super_admin'].includes(req.user.role))return res.status(403).json({error:'Administrator access required.'});
  const id=Number(req.params.id),value=req.body.imageUrl;
  if(!Number.isSafeInteger(id)||typeof value!=='string'||value.length>350000)return res.status(400).json({error:'Choose an image under 250 KB or a valid URL.'});
- if(value&&!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)){try{const u=new URL(value);if(!['http:','https:'].includes(u.protocol)||u.username||u.password)throw Error()}catch{return res.status(400).json({error:'Use an HTTP or HTTPS image URL.'})}}
+ if(value.startsWith('data:')){const match=/^data:image\/(png|jpeg|webp);base64,((?:[A-Za-z0-9+/]{4})+(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)$/.exec(value);if(!match||Buffer.from(match[2],'base64').length>250_000||Buffer.from(match[2],'base64').toString('base64')!==match[2])return res.status(400).json({error:'Choose a valid PNG, JPEG or WebP image under 250 KB.'})}
+ else if(value){if(value.length>2048)return res.status(400).json({error:'Image URL is too long.'});try{const u=new URL(value);if(u.protocol!=='https:'&&!(process.env.NODE_ENV!=='production'&&u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname))||u.username||u.password)throw Error()}catch{return res.status(400).json({error:'Use a valid HTTPS image URL.'})}}
  try{const args=[id,value];let scope='';if(req.user.role!=='super_admin'){args.push(req.user.company_id);scope=' AND company_id=$3'}const r=await pool.query("UPDATE vehicles SET metadata=jsonb_set(COALESCE(metadata,'{}'::jsonb),'{imageUrl}',to_jsonb($2::text),true) WHERE id=$1"+scope+" RETURNING id",args);if(!r.rowCount)return res.status(404).json({error:'Vehicle not found.'});res.json({ok:true,id,imageUrl:value})}catch{res.status(500).json({error:'Unable to save vehicle image.'})}
 });
 app.post('/api/vehicles/:id/commands',requireAuth,async(req,res)=>{
@@ -801,7 +783,7 @@ app.post('/api/vehicles', requireAuth, allowVehicleWrite, async (req,res)=>{
     await client.query('DELETE FROM device_admission_attempts WHERE imei=$1',[imei]);
     await client.query('COMMIT');
     const driverContact={name:String(metadata.driverName||''),qid:String(metadata.driverQid||''),mobile:String(metadata.driverMobile||'')};
-    res.status(201).json({ok:true,action:existing.rowCount?'updated':'linked_or_created',vehicle:{...saved,metadata,driverName:driverContact.name,driverQid:driverContact.qid,driverMobile:driverContact.mobile,driver_name:driverContact.name,driver_qid:driverContact.qid,driver_mobile:driverContact.mobile},trackingDevice:{id:device.id,name:device.name,uniqueId:device.uniqueId,status:device.status}});
+    res.status(201).json(redactSensitiveData({ok:true,action:existing.rowCount?'updated':'linked_or_created',vehicle:{...saved,metadata,driverName:driverContact.name,driverQid:driverContact.qid,driverMobile:driverContact.mobile,driver_name:driverContact.name,driver_qid:driverContact.qid,driver_mobile:driverContact.mobile},trackingDevice:{id:device.id,name:device.name,uniqueId:device.uniqueId,status:device.status}}));
   } catch(e){
     try{await client.query('ROLLBACK')}catch{}
     const status=e.response?.status,data=e.response?.data; console.error('Vehicle save error:',status||'',data||e.message);
@@ -988,7 +970,7 @@ app.delete('/api/users/:id',requireAuth,manageUsers,async(req,res)=>{
 
 // Additional real storage for the original interface. No customer rows are seeded.
 const cleanMetadata=value=>{if(!value||typeof value!=='object'||Array.isArray(value))return {};const out={...value};for(const key of ['password','temporaryPassword','password_hash','token','id','companyId'])delete out[key];return out};
-app.get('/api/platform/state',requireAuth,requireSuper,async(req,res)=>{try{const r=await pool.query('SELECT data,version FROM platform_state WHERE id=1');res.json(r.rows[0]||{data:{},version:0})}catch(e){res.status(500).json({error:'platform_state_unavailable'})}});
+app.get('/api/platform/state',requireAuth,requireSuper,async(req,res)=>{try{const r=await pool.query('SELECT data,version FROM platform_state WHERE id=1');const state=r.rows[0]||{data:{},version:0};if(state.data?.settings)state.data={...state.data,settings:redactPlatformSettings(state.data.settings)};res.set('Cache-Control','no-store').json(state)}catch(e){res.status(500).json({error:'platform_state_unavailable'})}});
 app.patch('/api/platform/settings',requireAuth,requireSuper,async(req,res)=>{
  try{
   const version=Number(req.body?.version),category=req.body?.category;
@@ -1014,16 +996,16 @@ app.patch('/api/platform/settings',requireAuth,requireSuper,async(req,res)=>{
   ]);
   if(!saved.rowCount){
    const current=(await pool.query("SELECT version,COALESCE(data->'settings','{}'::jsonb) AS settings FROM platform_state WHERE id=1")).rows[0]||{version:0,settings:{}};
-   return res.status(409).json({error:'platform_settings_conflict',message:'Another administrator changed these settings. Refresh and retry.',...current});
+   return res.status(409).json({error:'platform_settings_conflict',message:'Another administrator changed these settings. Refresh and retry.',...current,settings:redactPlatformSettings(current.settings)});
   }
-  res.json({ok:true,category,...saved.rows[0]});
+  res.json({ok:true,category,...saved.rows[0],settings:redactPlatformSettings(saved.rows[0].settings)});
  }catch(error){
   if(error instanceof PlatformSettingsValidationError)return res.status(400).json({error:error.code,message:error.message});
   console.error('Platform settings patch:',error.message);
   res.status(500).json({error:'platform_settings_save_failed'});
  }
 });
-app.put('/api/platform/state',requireAuth,requireSuper,async(req,res)=>{try{const data=cleanMetadata(req.body.data);for(const key of ['companies','vehicles','devices','subAccounts'])delete data[key];const version=Number(req.body.version);if(!Number.isSafeInteger(version)||version<0)return res.status(400).json({error:'version_required'});const current=(await pool.query('SELECT data FROM platform_state WHERE id=1')).rows[0]?.data||{},incomingSettings=data.settings&&typeof data.settings==='object'?data.settings:null,currentSettings=current.settings&&typeof current.settings==='object'?current.settings:{},protectedKeys=['googleMapsKey','mapillaryAccessToken','mapTilerKey','mapboxToken','hereMapsKey','tomtomMapsKey','yandexMapsKey','geoapifyKey','locationIqKey','tomtomGeocodingKey','mapboxGeocodingToken','hereGeocodingKey','mapTilerGeocodingKey','bingMapsKey','streetviewApiKey','captchaSiteKey','captchaSecretKey'];if(incomingSettings)for(const key of protectedKeys)if(!String(incomingSettings[key]??'').trim()&&String(currentSettings[key]??'').trim())incomingSettings[key]=currentSettings[key];const r=await pool.query(`INSERT INTO platform_state(id,data,version) VALUES(1,$1::jsonb,1) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,version=platform_state.version+1,updated_at=NOW() WHERE platform_state.version=$2 RETURNING version`,[JSON.stringify(data),version]);if(!r.rowCount)return res.status(409).json({error:'Another administrator changed these records. Refresh and retry.'});res.json({ok:true,...r.rows[0]})}catch(e){res.status(500).json({error:'platform_save_failed'})}});
+app.put('/api/platform/state',requireAuth,requireSuper,async(req,res)=>{try{const data=cleanMetadata(req.body.data);if(data.settings&&typeof data.settings==='object')delete data.settings.secretConfigured;for(const key of ['companies','vehicles','devices','subAccounts'])delete data[key];const version=Number(req.body.version);if(!Number.isSafeInteger(version)||version<0)return res.status(400).json({error:'version_required'});const current=(await pool.query('SELECT data FROM platform_state WHERE id=1')).rows[0]?.data||{},incomingSettings=data.settings&&typeof data.settings==='object'?data.settings:null,currentSettings=current.settings&&typeof current.settings==='object'?current.settings:{},protectedKeys=['googleMapsKey','mapillaryAccessToken','mapTilerKey','mapboxToken','hereMapsKey','tomtomMapsKey','yandexMapsKey','geoapifyKey','locationIqKey','tomtomGeocodingKey','mapboxGeocodingToken','hereGeocodingKey','mapTilerGeocodingKey','bingMapsKey','streetviewApiKey','captchaSiteKey','captchaSecretKey'];if(incomingSettings)for(const key of protectedKeys)if(!String(incomingSettings[key]??'').trim()&&String(currentSettings[key]??'').trim())incomingSettings[key]=currentSettings[key];const r=await pool.query(`INSERT INTO platform_state(id,data,version) VALUES(1,$1::jsonb,1) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,version=platform_state.version+1,updated_at=NOW() WHERE platform_state.version=$2 RETURNING version`,[JSON.stringify(data),version]);if(!r.rowCount)return res.status(409).json({error:'Another administrator changed these records. Refresh and retry.'});res.json({ok:true,...r.rows[0]})}catch(e){res.status(500).json({error:'platform_save_failed'})}});
 app.get('/api/platform/database',requireAuth,requireSuper,async(req,res)=>{try{const r=await pool.query("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename");res.json({connected:true,tables:r.rows.map(x=>x.tablename)})}catch(e){res.status(503).json({error:'database_unavailable'})}});
 app.get('/api/platform/logs',requireAuth,requireSuper,async(req,res)=>{try{const r=await pool.query('SELECT a.*,u.name AS actor FROM audit_events a LEFT JOIN auth_users u ON u.id=a.user_id ORDER BY a.created_at DESC LIMIT 250');res.json(r.rows)}catch(e){res.status(500).json({error:'logs_unavailable'})}});
 app.put('/api/auth/profile',requireAuth,async(req,res)=>{const name=cleanString(req.body.name),email=cleanString(req.body.email).toLowerCase();if(!name||!email.includes('@'))return res.status(400).json({error:'Name and email are required.'});try{const r=await pool.query('UPDATE auth_users SET name=$1,email=$2,updated_at=NOW() WHERE id=$3 RETURNING id,name,email',[name,email,req.user.id]);res.json(r.rows[0])}catch(e){res.status(409).json({error:'Profile could not be updated. Check that the email is not already used.'})}});
@@ -1093,6 +1075,9 @@ await pool.query(await readFile(new URL('./migration-diagnostics.sql',import.met
 await pool.query(await readFile(new URL('./migration-geocoding.sql',import.meta.url),'utf8'));
 await pool.query(await readFile(new URL('./migration-parent-bus.sql',import.meta.url),'utf8'));
 await pool.query(await readFile(new URL('./migration-auth-app-roles.sql',import.meta.url),'utf8'));
+await pool.query(await readFile(new URL('./migration-login-attempts.sql',import.meta.url),'utf8'));
+const loginAttemptPruneTimer=setInterval(()=>pruneLoginAttemptWindows(pool).catch(error=>console.error('Login-attempt cleanup unavailable:',error.message)),60*60*1000);
+loginAttemptPruneTimer.unref();
 await initializeDeviceProfiles(pool);
 registerDeviceProfileRoutes(app,{pool,requireAuth,requireSuper,readLiveSnapshots});
 await initializePush(app,{pool,requireAuth});

@@ -8,6 +8,8 @@ The API uses the exact app role names `fleet` and `parent`. A user can have eith
 
 `POST /api/auth/login` keeps returning `token`, `user`, and `expiresAt`. It now also returns top-level `availableRoles`, `defaultRole`, and `activeRole`. `user` includes `accountRole`, `availableRoles`, `defaultRole`, and `activeRole`; its legacy `role` value is the effective authorization role for the issued token. The default is `fleet` when that role is granted, otherwise `parent`.
 
+Login attempt limits are enforced by the API for browser and mobile clients. The fleet endpoint (`POST /api/auth/login`) and School Bus endpoint (`POST /api/school/auth/login`) share one account counter: the first five requests in a 60-second window are processed normally, including successful sign-ins, and request six receives HTTP `429` with `{ "error": "too_many_login_attempts", "message": "Too many login attempts. Please try again after 1 minute." }` and a `Retry-After` header. The window resets 60 seconds after its first attempt. Mobile clients should display the server-provided `message` for this response.
+
 To switch, send the current bearer token with:
 
 ```http
