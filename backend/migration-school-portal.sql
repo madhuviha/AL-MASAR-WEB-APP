@@ -1,8 +1,6 @@
 -- Separate School Bus API identity, sessions, and application state.
 -- Fleet users, fleet sessions, and fleet company state are left intact.
-ALTER TABLE auth_users DROP CONSTRAINT IF EXISTS auth_users_role_check;
-ALTER TABLE auth_users ADD CONSTRAINT auth_users_role_check
-  CHECK (role IN ('super_admin','company_admin','company_user','parent','school_admin'));
+-- Role constraints are managed by the explicit migration-school-admin-role.sql.
 
 CREATE TABLE IF NOT EXISTS school_accounts (
   company_id BIGINT PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,

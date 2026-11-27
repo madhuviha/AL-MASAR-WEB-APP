@@ -1,16 +1,6 @@
 -- Parent bus tracking storage. This is intentionally separate from driver
 -- identification/RFID tables: a child scan represents a passenger event.
-ALTER TABLE auth_users DROP CONSTRAINT IF EXISTS auth_users_role_check;
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conrelid='auth_users'::regclass AND conname='auth_users_role_check'
-  ) THEN
-    ALTER TABLE auth_users ADD CONSTRAINT auth_users_role_check
-      CHECK (role IN ('super_admin','company_admin','company_user','parent','school_admin'));
-  END IF;
-END $$;
+-- Role constraints are changed only by the explicit, reviewed role migration.
 
 CREATE TABLE IF NOT EXISTS school_children (
   id BIGSERIAL PRIMARY KEY,

@@ -10,31 +10,32 @@ import {normalizeCommandRequest,companyUserCanAccessVehicle,commandPermissionGra
 import {preparePlatformSettingsPatch,PlatformSettingsValidationError,redactPlatformSettings} from '../platform-settings.mjs';
 import {prepareCompanySettingsPatch,prepareLegacyCompanySettingsPatch,CompanySettingsValidationError} from '../company-settings.mjs';
 import {authRolePayload,defaultAppRole,scopeUserToSession} from '../auth-roles.mjs';
-import {boundedInteger,consumeLoginAttempt,createLoginLimiter,LOGIN_ATTEMPT_LIMIT_MESSAGE,logLoginFailure,parseAllowedOrigins,redactSensitiveData,sessionDays} from '../security-controls.mjs';
+import {boundedInteger,clearSessionCookie,consumeLoginAttempt,createLoginLimiter,isWebClient,LOGIN_ATTEMPT_LIMIT_MESSAGE,LOGIN_FAILURE_LIMIT_MESSAGE,LOGIN_IP_LIMIT_MESSAGE,LOGIN_IP_WINDOW_MS,logLoginFailure,MAX_LOGIN_ATTEMPTS_PER_IP,originAllowedForCookieRequest,parseAllowedOrigins,redactSensitiveData,redactSensitiveText,requestClient,sessionDays,sessionLifetimeMs,sessionTokenFromRequest,setSessionCookie,usesCookieSession,validateProductionOrigins} from '../security-controls.mjs';
+import {createRecoveryCodes,createTotpSetupKey,decryptTotpSecret,encryptTotpSecret,parseMfaEncryptionKey,recoveryCodeHash,verifyTotpCode} from '../mfa-totp.mjs';
 const source=fs.readFileSync(new URL('../server.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').split("\nawait pool.query(await readFile(")[0];
-function harness(query=async()=>({rows:[],rowCount:0}),tracking=async()=>({data:[]})){
+function harness(query=async()=>({rows:[],rowCount:0}),tracking=async()=>({data:[]}),env={}){
  const routes=new Map();let trackingCalls=0;
  const app={use(){},listen(){},set(){}};for(const method of ['get','post','put','patch','delete'])app[method]=(path,...handlers)=>routes.set(method+' '+path,handlers);
- const express=()=>app;express.json=()=>()=>{};
- const loginAttemptWindows=new Map();
+ const express=()=>app;express.json=()=>()=>{};express.text=()=>()=>{};
+ const loginAttemptWindows=new Map();const consoleErrors=[];
  const trackedQuery=async(sql,args=[])=>{
   if(sql.includes('INSERT INTO auth_login_attempt_windows')){
-   const [identityHash,timestamp]=args,now=new Date(timestamp).getTime(),previous=loginAttemptWindows.get(identityHash);
-   const window=!previous||previous.startedAt+60000<=now?{startedAt:now,count:1}:{startedAt:previous.startedAt,count:previous.count+1};
+   const [identityHash,timestamp,windowMs=60000]=args,now=new Date(timestamp).getTime(),previous=loginAttemptWindows.get(identityHash),period=Number(windowMs)||60000;
+   const window=!previous||previous.startedAt+period<=now?{startedAt:now,count:1}:{startedAt:previous.startedAt,count:previous.count+1};
    loginAttemptWindows.set(identityHash,window);
    return {rows:[{window_started_at:new Date(window.startedAt),attempt_count:window.count}]};
   }
-  return query(sql,args);
+  try{return await query(sql,args)}catch(error){consoleErrors.push(String(error?.stack||error));throw error}
  };
  const pool={query:trackedQuery,connect:async()=>({query:trackedQuery,release(){}})};
  const createGoogleGeocoder=()=>({cached:async()=>null,cachedMany:async()=>new Map(),reverse:async()=>null,save:async()=>null});
  const validGeocodeCoordinates=(latitude,longitude)=>Number.isFinite(Number(latitude))&&Number.isFinite(Number(longitude));
  const geocodeCacheKey=(latitude,longitude)=>`${Number(latitude).toFixed(4)},${Number(longitude).toFixed(4)}`;
  const readableAddress=value=>String(value||'').trim().length>=5;
- const context={EventEmitter,recentAlerts,normalizeProtocolAttributes,normalizeProtocolPosition,normalizeCommandRequest,companyUserCanAccessVehicle,commandPermissionGranted,immobilizerPermissionGranted,CommandValidationError,preparePlatformSettingsPatch,PlatformSettingsValidationError,redactPlatformSettings,prepareCompanySettingsPatch,prepareLegacyCompanySettingsPatch,CompanySettingsValidationError,authRolePayload,defaultAppRole,scopeUserToSession,boundedInteger,consumeLoginAttempt,LOGIN_ATTEMPT_LIMIT_MESSAGE,createLoginLimiter,logLoginFailure,parseAllowedOrigins,redactSensitiveData,sessionDays,createGoogleGeocoder,validGeocodeCoordinates,geocodeCacheKey,readableAddress,promisify:fn=>fn,execFile(){},enrichDriverHistory:async(_db,_vehicle,_type,result)=>result,express,cors:()=>()=>{},dotenv:{config(){}},pg:{Pool:function(){return pool}},axios:{create:()=>({get:async(...args)=>{trackingCalls++;return tracking(...args)},post:async(...args)=>{trackingCalls++;return tracking(...args)}})},crypto,process:{env:{}},console:{log(){},warn(){},error(){}},Buffer,Date};
+ const context={EventEmitter,recentAlerts,normalizeProtocolAttributes,normalizeProtocolPosition,normalizeCommandRequest,companyUserCanAccessVehicle,commandPermissionGranted,immobilizerPermissionGranted,CommandValidationError,preparePlatformSettingsPatch,PlatformSettingsValidationError,redactPlatformSettings,prepareCompanySettingsPatch,prepareLegacyCompanySettingsPatch,CompanySettingsValidationError,authRolePayload,defaultAppRole,scopeUserToSession,boundedInteger,clearSessionCookie,consumeLoginAttempt,LOGIN_ATTEMPT_LIMIT_MESSAGE,LOGIN_FAILURE_LIMIT_MESSAGE,LOGIN_IP_LIMIT_MESSAGE,LOGIN_IP_WINDOW_MS,MAX_LOGIN_ATTEMPTS_PER_IP,createLoginLimiter,isWebClient,logLoginFailure,originAllowedForCookieRequest,parseAllowedOrigins,redactSensitiveData,redactSensitiveText,requestClient,sessionDays,sessionLifetimeMs,sessionTokenFromRequest,setSessionCookie,usesCookieSession,validateProductionOrigins,createRecoveryCodes,createTotpSetupKey,decryptTotpSecret,encryptTotpSecret,parseMfaEncryptionKey,recoveryCodeHash,verifyTotpCode,createGoogleGeocoder,validGeocodeCoordinates,geocodeCacheKey,readableAddress,promisify:fn=>fn,execFile(){},enrichDriverHistory:async(_db,_vehicle,_type,result)=>result,express,cors:()=>()=>{},dotenv:{config(){}},pg:{Pool:function(){return pool}},axios:{create:()=>({get:async(...args)=>{trackingCalls++;return tracking(...args)},post:async(...args)=>{trackingCalls++;return tracking(...args)}})},crypto,process:{env},console:{log(){},warn(){},error(...args){consoleErrors.push(args.map(String).join(' '))}},Buffer,Date};
  vm.runInNewContext(source,context);
- async function run(method,path,req,index=-1){const handlers=routes.get(method+' '+path);assert.ok(handlers,'Route registered');const res={code:200,body:null,headers:{},status(n){this.code=n;return this},set(name,value){this.headers[name]=value;return this},json(b){this.body=b;return this}};await handlers.at(index)({body:{},query:{},params:{},headers:{},...req},res,()=>{res.next=true});return res}
- return {run,get trackingCalls(){return trackingCalls}};
+ async function run(method,path,req,index=-1){const handlers=routes.get(method+' '+path);assert.ok(handlers,'Route registered');const res={code:200,body:null,headers:{},status(n){this.code=n;return this},set(name,value){this.headers[name]=value;return this},getHeader(name){return this.headers[name]},setHeader(name,value){this.headers[name]=value;return this},json(b){this.body=b;return this}};await handlers.at(index)({body:{},query:{},params:{},headers:{},...req},res,()=>{res.next=true});return res}
+ return {run,get trackingCalls(){return trackingCalls},get consoleErrors(){return consoleErrors}};
 }
 const reportTo=new Date(Date.now()-86400000),reportFrom=new Date(reportTo.getTime()-86400000);
 const range={deviceId:'10',from:reportFrom.toISOString(),to:reportTo.toISOString()};
@@ -51,6 +52,71 @@ test('dual-role login returns both app roles and creates a default fleet-scoped 
  assert.equal(r.code,200);assert.deepEqual(JSON.parse(JSON.stringify(r.body.availableRoles)),['fleet','parent']);
  assert.equal(r.body.activeRole,'fleet');assert.equal(r.body.defaultRole,'fleet');assert.equal(r.body.user.accountRole,'company_admin');
  assert.equal(sessionWrites.length,1);assert.equal(sessionWrites[0].args[3],'fleet');assert.equal(r.body.token.length,64);
+});
+test('web login stores its session in an HttpOnly cookie and omits the bearer token from JSON',async()=>{
+ const password='browser-session-test-password',salt='browser-session-salt',hash=crypto.scryptSync(password,salt,64).toString('hex');
+ const h=harness(async(sql)=>{
+  if(sql.includes("COALESCE(data->'settings'"))return {rows:[{settings:{captchaProvider:'None'}}]};
+  if(sql.startsWith('SELECT * FROM auth_users WHERE lower(email)'))return {rows:[{id:43,company_id:7,name:'Browser Admin',email:'browser@example.invalid',role:'company_admin',status:'active',metadata:{},password_hash:`${salt}:${hash}`}]};
+  if(sql.startsWith('SELECT app_role FROM auth_user_app_roles'))return {rows:[{app_role:'fleet'}]};
+  if(sql.startsWith('INSERT INTO auth_sessions'))return {rows:[]};
+  throw Error(`Unexpected browser login query: ${sql}`);
+ });
+ const r=await h.run('post','/api/auth/login',{body:{email:'browser@example.invalid',password,rememberMe:true},ip:'127.0.0.1',headers:{'x-masar-client':'web-company','x-forwarded-proto':'https'}});
+ assert.equal(r.code,200);assert.equal(r.body.token,undefined);assert.equal(r.body.user.email,'browser@example.invalid');
+ const cookie=r.headers['Set-Cookie']?.find(value=>value.startsWith('masar_fleet_session='));
+ assert.ok(cookie);assert.match(cookie,/HttpOnly/);assert.match(cookie,/SameSite=Lax/);assert.match(cookie,/; Secure/);assert.match(cookie,/Max-Age=604800/);
+});
+test('Super Admin cannot use the legacy password-only sign-in flow',async()=>{
+ const password='super-admin-test-password',salt='super-admin-test-salt',hash=crypto.scryptSync(password,salt,64).toString('hex'),sessionWrites=[];
+ const h=harness(async(sql)=>{
+  if(sql.includes("COALESCE(data->'settings'"))return {rows:[{settings:{captchaProvider:'None'}}]};
+  if(sql.startsWith('SELECT * FROM auth_users WHERE lower(email)'))return {rows:[{id:51,company_id:null,name:'Protected Admin',email:'super@example.invalid',role:'super_admin',status:'active',metadata:{},password_hash:`${salt}:${hash}`}]};
+  if(sql.startsWith('SELECT app_role FROM auth_user_app_roles'))return {rows:[{app_role:'fleet'}]};
+  if(sql.startsWith('INSERT INTO auth_sessions'))sessionWrites.push(sql);
+  return {rows:[],rowCount:0};
+ },undefined,{SUPER_ADMIN_MFA_REQUIRED:'true',SUPER_ADMIN_MFA_ENCRYPTION_KEY:Buffer.alloc(32,5).toString('base64')});
+ const r=await h.run('post','/api/auth/login',{body:{email:'super@example.invalid',password},ip:'127.0.0.1',headers:{'x-masar-client':'web-admin'}});
+ assert.equal(r.code,426);assert.equal(r.body.error,'super_admin_mfa_portal_required');assert.equal(sessionWrites.length,0);
+});
+test('Super Admin password login returns a TOTP enrollment challenge without creating a session',async()=>{
+ const password='super-admin-test-password',salt='super-admin-test-salt',hash=crypto.scryptSync(password,salt,64).toString('hex'),sessionWrites=[],challengeWrites=[];
+ const h=harness(async(sql)=>{
+  if(sql.includes("COALESCE(data->'settings'"))return {rows:[{settings:{captchaProvider:'None'}}]};
+  if(sql.startsWith('SELECT * FROM auth_users WHERE lower(email)'))return {rows:[{id:52,company_id:null,name:'Protected Admin',email:'super@example.invalid',role:'super_admin',status:'active',metadata:{},password_hash:`${salt}:${hash}`}]};
+  if(sql.startsWith('SELECT app_role FROM auth_user_app_roles'))return {rows:[{app_role:'fleet'}]};
+  if(sql.startsWith('INSERT INTO auth_sessions'))sessionWrites.push(sql);
+  if(sql.startsWith('INSERT INTO auth_mfa_challenges'))challengeWrites.push(sql);
+  return {rows:[],rowCount:0};
+ },undefined,{SUPER_ADMIN_MFA_REQUIRED:'true',SUPER_ADMIN_MFA_ENCRYPTION_KEY:Buffer.alloc(32,5).toString('base64')});
+ const r=await h.run('post','/api/auth/login',{body:{email:'super@example.invalid',password,rememberMe:true},ip:'127.0.0.1',headers:{'x-masar-client':'web-admin','x-masar-auth-mode':'cookie-v1'}});
+ assert.equal(r.code,200);assert.equal(r.body.mfaEnrollmentRequired,true);assert.equal(typeof r.body.challengeId,'string');assert.equal(r.body.token,undefined);
+ assert.equal(sessionWrites.length,0);assert.equal(challengeWrites.length,1);
+});
+test('Super Admin can enroll a second authenticator before global enforcement is enabled',async()=>{
+ const password='super-admin-test-password',salt='super-admin-test-salt',hash=crypto.scryptSync(password,salt,64).toString('hex'),sessionWrites=[],challengeWrites=[];
+ const h=harness(async(sql)=>{
+  if(sql.includes("COALESCE(data->'settings'"))return {rows:[{settings:{captchaProvider:'None'}}]};
+  if(sql.startsWith('SELECT * FROM auth_users WHERE lower(email)'))return {rows:[{id:53,company_id:null,name:'Second Admin',email:'second@example.invalid',role:'super_admin',status:'active',metadata:{},password_hash:`${salt}:${hash}`}]};
+  if(sql.startsWith('SELECT app_role FROM auth_user_app_roles'))return {rows:[{app_role:'fleet'}]};
+  if(sql.startsWith('INSERT INTO auth_sessions'))sessionWrites.push(sql);
+  if(sql.startsWith('INSERT INTO auth_mfa_challenges'))challengeWrites.push(sql);
+  return {rows:[],rowCount:0};
+ },undefined,{SUPER_ADMIN_MFA_REQUIRED:'false',SUPER_ADMIN_MFA_ENCRYPTION_KEY:Buffer.alloc(32,5).toString('base64')});
+ const r=await h.run('post','/api/auth/login',{body:{email:'second@example.invalid',password,enrollMfa:true},ip:'127.0.0.1',headers:{'x-masar-client':'web-admin','x-masar-auth-mode':'cookie-v1'}});
+ assert.equal(r.code,200);assert.equal(r.body.mfaEnrollmentRequired,true);assert.equal(typeof r.body.challengeId,'string');assert.equal(sessionWrites.length,0);assert.equal(challengeWrites.length,1);
+});
+test('a Super Admin may use the staged password login while global MFA enforcement remains disabled',async()=>{
+ const password='super-admin-test-password',salt='super-admin-test-salt',hash=crypto.scryptSync(password,salt,64).toString('hex'),sessionWrites=[];
+ const h=harness(async(sql)=>{
+  if(sql.includes("COALESCE(data->'settings'"))return {rows:[{settings:{captchaProvider:'None'}}]};
+  if(sql.startsWith('SELECT * FROM auth_users WHERE lower(email)'))return {rows:[{id:54,company_id:null,name:'Staged Admin',email:'staged@example.invalid',role:'super_admin',status:'active',metadata:{},password_hash:`${salt}:${hash}`}]};
+  if(sql.startsWith('SELECT app_role FROM auth_user_app_roles'))return {rows:[{app_role:'fleet'}]};
+  if(sql.startsWith('INSERT INTO auth_sessions'))sessionWrites.push(sql);
+  return {rows:[],rowCount:0};
+ },undefined,{SUPER_ADMIN_MFA_REQUIRED:'false'});
+ const r=await h.run('post','/api/auth/login',{body:{email:'staged@example.invalid',password},ip:'127.0.0.1',headers:{'x-masar-client':'web-admin','x-masar-auth-mode':'cookie-v1'}});
+ assert.equal(r.code,200);assert.equal(r.body.user.role,'super_admin');assert.equal(sessionWrites.length,1);assert.match((r.headers['Set-Cookie']||[]).join(';'),/masar_admin_session=/);
 });
 test('fleet login counts successful and unsuccessful attempts and blocks attempt six with the one-minute message',async()=>{
  const password='first-attempt-is-success',salt='rate-limit-salt',hash=crypto.scryptSync(password,salt,64).toString('hex');let userLookups=0;
@@ -90,11 +156,30 @@ test('unbounded report ranges are rejected before database access',async()=>{con
 test('read-only users cannot mutate company records',async()=>{const h=harness(async()=>{throw Error('should not query')});const r=await h.run('put','/api/company/state',{user:{role:'company_user',company_id:1},body:{data:{drivers:[]},version:1}});assert.equal(r.code,403)});
 test('conflicting state revisions return 409 and do not claim success',async()=>{const h=harness(async(sql,values)=>{if(['BEGIN','ROLLBACK'].includes(sql)||sql.startsWith('SELECT data FROM company_state'))return {rows:[]};assert.ok(sql.includes('WHERE company_state.version=$4'));assert.equal(values[3],4);return {rows:[]}});const r=await h.run('put','/api/company/state',{user:{id:3,role:'company_admin',company_id:1},body:{data:{drivers:[]},version:4}});assert.equal(r.code,409)});
 test('legacy browser accounts are not returned from company state',async()=>{const h=harness(async()=>({rows:[{data:{users:[{password:'must-never-leak'}],drivers:[]},version:1}]}));const r=await h.run('get','/api/company/state',{user:{company_id:1}});assert.equal(r.body.data.users,undefined)});
-test('user creation uses tenant from authenticated account, hashes password, and grants fleet role',async()=>{const password='Valid-test-password-2026';const h=harness(async(sql,args=[])=>{if(['BEGIN','COMMIT','ROLLBACK'].includes(sql))return {rows:[]};if(sql.startsWith('INSERT INTO auth_users')){assert.equal(args[0],1);assert.notEqual(args[3],password);const[salt,hash]=args[3].split(':');assert.equal(crypto.scryptSync(password,salt,64).toString('hex'),hash);return {rows:[{id:4,name:'Test',companyId:1}]}}if(sql.startsWith('INSERT INTO auth_user_app_roles')){assert.equal(args[0],4);assert.equal(args[1],88);assert.match(sql,/VALUES\(\$1,'fleet',\$2\)/);return {rows:[]}}throw Error(`Unexpected user-create query: ${sql}`)});const r=await h.run('post','/api/users',{user:{id:88,role:'company_admin',company_id:1},body:{companyId:999,name:'Test',email:'test@example.invalid',password}});assert.equal(r.code,201)});
+test('user creation uses tenant from authenticated account, hashes password, grants and audits fleet role',async()=>{
+ const password='Valid-test-password-2026';let roleAudit;
+ const h=harness(async(sql,args=[])=>{
+  if(['BEGIN','COMMIT','ROLLBACK'].includes(sql))return {rows:[]};
+  if(sql.startsWith('INSERT INTO auth_users')){
+   assert.equal(args[0],1);assert.notEqual(args[3],password);
+   const[salt,hash]=args[3].split(':');assert.equal(crypto.scryptSync(password,salt,64).toString('hex'),hash);
+   return {rows:[{id:4,name:'Test',companyId:1}]};
+  }
+  if(sql.startsWith('INSERT INTO auth_user_app_roles')){
+   assert.equal(args[0],4);assert.equal(args[1],88);assert.match(sql,/VALUES\(\$1,'fleet',\$2\)/);return {rows:[]};
+  }
+  if(sql.startsWith('INSERT INTO audit_events')){
+   assert.equal(args[0],1);assert.equal(args[1],88);assert.equal(args[2],'4');roleAudit=JSON.parse(args[3]);return {rows:[]};
+  }
+  throw Error(`Unexpected user-create query: ${sql}`);
+ });
+ const r=await h.run('post','/api/users',{user:{id:88,role:'company_admin',company_id:1},body:{companyId:999,name:'Test',email:'test@example.invalid',password}});
+ assert.equal(r.code,201,h.consoleErrors.join('\n'));assert.deepEqual(roleAudit,{accountRole:'company_user',grantedAppRoles:['fleet']});
+});
 test('editing another tenant account is rejected',async()=>{const h=harness(async sql=>({rows:sql.includes('SELECT * FROM auth_users')?[{id:9,company_id:2}]:[]}));const r=await h.run('put','/api/users/:id',{user:{id:1,role:'company_admin',company_id:1},params:{id:9}});assert.equal(r.code,404)});
 test('administrator cannot disable their own account',async()=>{const h=harness(async sql=>({rows:sql.includes('SELECT * FROM auth_users')?[{id:1,company_id:1}]:[]}));const r=await h.run('put','/api/users/:id',{user:{id:1,role:'company_admin',company_id:1},params:{id:1},body:{status:'inactive',role:'company_admin'}});assert.equal(r.code,400)});
-test('password change revokes every other signed-in device',async()=>{const calls=[];const h=harness(async(sql,args=[])=>{calls.push({sql,args});return {rows:[],rowCount:1}});const token='current-browser-session',r=await h.run('post','/api/auth/change-password',{user:{id:7,role:'company_admin',company_id:1},headers:{authorization:'Bearer '+token},body:{password:'A-secure-new-password-2026'}});assert.equal(r.code,200);assert.equal(r.body.otherSessionsRevoked,true);const deletion=calls.find(call=>call.sql.startsWith('DELETE FROM auth_sessions WHERE user_id='));assert.ok(deletion);assert.equal(deletion.args[0],7);assert.equal(deletion.args[1],crypto.createHash('sha256').update(token).digest('hex'))});
-test('suspended company cannot continue an existing authenticated session',async()=>{const h=harness(async sql=>({rows:sql.includes('JOIN auth_users')?[{id:1,company_id:1,status:'active'}]:[{status:'suspended'}]}));const r=await h.run('get','/api/companies',{headers:{authorization:'Bearer example'}},0);assert.equal(r.code,403);assert.equal(r.next,undefined)});
+test('password change revokes every other signed-in device',async()=>{const calls=[];const h=harness(async(sql,args=[])=>{calls.push({sql,args});return {rows:[],rowCount:1}});const token='current-browser-session',r=await h.run('post','/api/auth/change-password',{user:{id:7,role:'company_admin',company_id:1},authToken:token,headers:{authorization:'Bearer '+token},body:{password:'A-secure-new-password-2026'}});assert.equal(r.code,200);assert.equal(r.body.otherSessionsRevoked,true);const deletion=calls.find(call=>call.sql.startsWith('DELETE FROM auth_sessions WHERE user_id='));assert.ok(deletion);assert.equal(deletion.args[0],7);assert.equal(deletion.args[1],crypto.createHash('sha256').update(token).digest('hex'))});
+test('suspended company cannot continue an existing authenticated session',async()=>{const h=harness(async sql=>({rows:sql.includes('JOIN auth_users')?[{id:1,company_id:1,account_role:'company_admin',available_roles:['fleet'],status:'active'}]:[{status:'suspended'}]}));const r=await h.run('get','/api/companies',{headers:{authorization:'Bearer example'}},0);assert.equal(r.code,403);assert.equal(r.next,undefined)});
 
 test('platform settings are stored with an explicit revision and without browser account snapshots',async()=>{const h=harness(async(sql,args)=>{assert.ok(sql.includes('platform_state'));if(sql.startsWith('SELECT data FROM platform_state'))return {rows:[{data:{settings:{}}}]};const data=JSON.parse(args[0]);assert.equal(data.companies,undefined);assert.equal(data.subAccounts,undefined);assert.deepEqual(data.settings,{portalTitle:'Actual title'});assert.equal(args[1],3);return {rows:[{version:4}],rowCount:1}});const r=await h.run('put','/api/platform/state',{user:{role:'super_admin'},body:{version:3,data:{settings:{portalTitle:'Actual title'},companies:[{id:1}],subAccounts:{}}}});assert.equal(r.code,200);assert.equal(r.body.version,4)});
 test('blank platform secret fields preserve the saved API credentials',async()=>{let saved;const h=harness(async(sql,args)=>{if(sql.startsWith('SELECT data FROM platform_state'))return {rows:[{data:{settings:{mapTilerKey:'saved-map-key',mapillaryAccessToken:'saved-mapillary-token'}}}]};saved=JSON.parse(args[0]);return {rows:[{version:6}],rowCount:1}});const r=await h.run('put','/api/platform/state',{user:{role:'super_admin'},body:{version:5,data:{settings:{mapTilerKey:'',mapillaryAccessToken:'',portalTitle:'Updated'}}}});assert.equal(r.code,200);assert.equal(saved.settings.mapTilerKey,'saved-map-key');assert.equal(saved.settings.mapillaryAccessToken,'saved-mapillary-token');assert.equal(saved.settings.portalTitle,'Updated')});

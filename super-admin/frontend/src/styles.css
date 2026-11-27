@@ -777,3 +777,12 @@ main{margin-left:64px!important;transition:none!important}
 @media(prefers-reduced-motion:reduce){.miniBars i,.fleetStatusRing{animation:none!important;transition:none!important}}
 
 .schoolModuleBadge{display:inline-flex;align-items:center;padding:4px 9px;border:1px solid #b9e8cc;border-radius:999px;background:#e9f8ef;color:#087a43;font-size:12px;font-weight:700;white-space:nowrap}
+
+.mfaSetupPanel,.mfaRecoveryPanel{margin:14px 0 18px;padding:14px;border:1px solid #d5dfe7;border-radius:10px;background:#f8fbfd;color:#294457;font-size:13px;line-height:1.55}
+.mfaSetupPanel>b{display:block;margin-bottom:8px}.mfaSetupPanel>p{margin:9px 0 12px;color:#607487;font-size:12px}
+.mfaSetupKey{display:block;overflow-wrap:anywhere;padding:12px;border:1px solid #d5dfe7;border-radius:7px;background:#fff;color:#0b2a5b;font-size:15px;font-weight:700;letter-spacing:.08em;text-align:center;user-select:all}
+.productionAdminCard input.mfaCodeInput{height:48px;margin-top:7px;text-align:center;font-size:20px;font-weight:700;letter-spacing:.18em}
+.mfaRecoveryCodes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:13px}.mfaRecoveryCodes code{padding:8px 6px;border:1px solid #d5dfe7;border-radius:6px;background:#fff;color:#0b2a5b;text-align:center;font-size:13px;font-weight:700}
+.mfaRecoveryPanel .secondaryBtn,.backToLogin{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:0 12px;border:1px solid #d5dfe7;border-radius:7px;background:#fff;color:#294457;font-size:13px;font-weight:600;cursor:pointer}
+.mfaRecoveryPanel .secondaryBtn svg{width:15px;height:15px}.backToLogin{margin:4px 0 2px;border:0;color:#1765a8;background:transparent}
+.mfaOptInButton{display:block;margin:8px auto 2px;padding:6px 10px;border:0;background:transparent;color:#1765a8;font-family:inherit;font-size:13px;font-weight:600;line-height:1.4;cursor:pointer}.mfaOptInButton:hover{text-decoration:underline}.mfaOptInButton:focus-visible{outline:3px solid #b7d4ff;outline-offset:2px;border-radius:4px}

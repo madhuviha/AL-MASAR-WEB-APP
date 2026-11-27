@@ -166,10 +166,12 @@ const applySuperBranding = (settings) => {
 };
 const API_BASE = "/inviha-api/api";
 const AUTH_KEY = "inviha_super_token";
-const getToken = () => localStorage.getItem(AUTH_KEY) || "";
+const getToken = () => "";
+try { localStorage.removeItem(AUTH_KEY); } catch {}
 async function apiJson(path, options = {}) {
-  const token = getToken();
-  const r = await fetch(`${API_BASE}${path}`, { headers: { "Content-Type": "application/json", ...token ? { Authorization: `Bearer ${token}` } : {}, ...options.headers || {} }, ...options });
+  const headers = { "Content-Type": "application/json", "X-Masar-Client": "web-admin", "X-Masar-Auth-Mode": "cookie-v1", ...options.headers || {} };
+  delete headers.Authorization;
+  const r = await fetch(`${API_BASE}${path}`, { ...options, credentials: options.credentials || "same-origin", headers });
   let body = null;
   try {
     body = await r.json();
@@ -178,7 +180,7 @@ async function apiJson(path, options = {}) {
   if (!r.ok) {
     if (r.status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/setup-')) {
       localStorage.removeItem(AUTH_KEY);
-      setTimeout(() => location.reload(), 0);
+      if (path !== "/auth/me") setTimeout(() => location.reload(), 0);
     }
     const raw = body?.error;
     const e = new Error(raw && /[ .]/.test(raw) && !/[{}<>]/.test(raw) ? raw : { 401: "Please sign in again.", 403: "You do not have permission for this action.", 409: "Records changed. Refresh and try again." }[r.status] || "The request could not be completed. Please try again.");
@@ -189,10 +191,12 @@ async function apiJson(path, options = {}) {
   return body;
 }
 async function schoolAdminJson(path, options = {}) {
-  const token = getToken();
+  const headers = { "Content-Type": "application/json", "X-Masar-Client": "web-admin", "X-Masar-Auth-Mode": "cookie-v1", ...options.headers || {} };
+  delete headers.Authorization;
   const response = await fetch(`/school-api/api/school/admin/accounts${path || ""}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers || {} }
+    credentials: options.credentials || "same-origin",
+    headers
   });
   let body = null;
   try { body = await response.json(); } catch {}
@@ -228,6 +232,16 @@ function apiCompanyToUi(c) {
 }
 function apiVehicleToUi(v) {
   return { ...v.metadata || {}, id: Number(v.id), name: v.name || "", plate: v.plate_number || "", license: v.registration || "", company: v.company_name || "", companyId: v.company_id ? Number(v.company_id) : null, imei: v.imei || "", protocol: v.protocol || "GT06", deviceModel: v.device_model || "", status: (v.status || "Offline").replace(/^./, (m) => m.toUpperCase()), deviceStatus: (v.connection_status || v.device_status || "offline").replace(/^./, (m) => m.toUpperCase()), category: v.metadata?.category || "Car", userEmail: v.metadata?.userEmail || "", expiry: v.expiration_date ? String(v.expiration_date).slice(0, 10) : "", sensorGroup: v.metadata?.sensorGroup || "", sensors: v.metadata?.sensors || [], deviceId: v.traccar_device_id || null, active: v.active !== false, latitude: v.latitude ?? null, longitude: v.longitude ?? null, current_driver: v.current_driver, mapped_io: v.mapped_io, telemetry: v.telemetry, speedKph: v.speed_kph ?? null, ignition: v.ignition ?? null, motion: v.motion ?? null, lastUpdate: v.last_update || null, positionTime: v.position_time || null, course: v.course ?? null, altitude: v.altitude ?? null, attributes: v.attributes || {}, fixTime: v.fix_time, positionValid: v.position_valid };
+}
+function withInventoryTimestamp(vehicle, inventory = []) {
+  const device = inventory.find((d) => vehicle.deviceId != null && String(d.id) === String(vehicle.deviceId))
+    || inventory.find((d) => vehicle.imei && String(d.imei) === String(vehicle.imei));
+  const timestamps = [vehicle.lastUpdate, device?.lastSeen]
+    .map((value) => ({ value, time: Date.parse(value) }))
+    .filter(({ time }) => Number.isFinite(time));
+  if (!timestamps.length) return vehicle;
+  const latest = timestamps.reduce((a, b) => a.time >= b.time ? a : b);
+  return { ...vehicle, lastUpdate: latest.value };
 }
 const companyPermissionOptions = ["Dashboard", "Live Map", "Vehicle List", "Vehicle Details", "History", "Trips", "Playback", "Reports", "Drivers", "RFID / iButton", "Alerts", "Geofences", "Sensors", "Fuel Monitoring", "Temperature Monitoring", "Seat Belt Monitoring", "Ignition Status", "Harsh Braking", "Harsh Acceleration", "Harsh Cornering", "Overspeed", "Idling", "Maintenance", "Commands", "Immobilizer", "Export Reports", "User Management"];
 const companyVehiclePermissionOptions = ["Immobilizer", "Add Vehicle", "Edit Vehicle", "Delete Vehicle", "Change IMEI", "Change Tracker Configuration", "Sensors/I/O"];
@@ -324,7 +338,7 @@ function subscribeVehicleStream(onRows, onConnection) {
     if (stopped) return;
     controller = new AbortController();
     try {
-      const token = getToken(), response = await fetch(`${API_BASE}/vehicles/stream`, { headers: { Accept: "text/event-stream", ...token ? { Authorization: `Bearer ${token}` } : {} }, signal: controller.signal });
+      const response = await fetch(`${API_BASE}/vehicles/stream`, { credentials: "same-origin", headers: { Accept: "text/event-stream", "X-Masar-Client": "web-admin" }, signal: controller.signal });
       if (!response.ok || !response.body) throw new Error("stream_unavailable");
       onConnection?.(true);
       retryMs = 1e3;
@@ -419,8 +433,15 @@ function useStableSidebar() {
 }
 function SuperLogin({ onReady }) {
   const [email, setEmail] = useState(() => localStorage.getItem("inviha_super_login_email") || ""), [password, setPassword] = useState(""), [showPassword, setShowPassword] = useState(false), [remember, setRemember] = useState(() => localStorage.getItem("inviha_super_login_remember") !== "false"), [name, setName] = useState("Super Admin"), [setup, setSetup] = useState(false), [loading, setLoading] = useState(true), [submitting, setSubmitting] = useState(false), [error, setError] = useState("");
-  const friendly = (e) => ({ invalid_credentials: "Incorrect email or password.", too_many_login_attempts: "Too many login attempts. Please try again after 1 minute.", account_disabled: "This account is disabled.", login_failed: "Unable to sign in right now.", captcha_required: "Complete the security check and try again.", email_and_password_required: "Enter a valid email and a password of at least 8 characters.", super_admin_already_exists: "The Super Admin account is already configured." })[e] || "Unable to sign in. Check your details or contact your administrator.";
-  useEffect(() => {
+  const [phase, setPhase] = useState("password"), [challengeId, setChallengeId] = useState(""), [setupKey, setSetupKey] = useState(""), [mfaCode, setMfaCode] = useState(""), [recoveryCodes, setRecoveryCodes] = useState([]), [mfaUser, setMfaUser] = useState(null), [copied, setCopied] = useState(false);
+  const friendly = (e) => ({
+    invalid_credentials: "Incorrect email or password.", too_many_login_attempts: "Too many login attempts. Please try again after 1 minute.",
+    account_disabled: "This account is disabled.", login_failed: "Unable to sign in right now.", captcha_required: "Complete the security check and try again.",
+    email_and_password_required: "Enter a valid email and a password of at least 8 characters.", super_admin_already_exists: "The Super Admin account is already configured.",
+    super_admin_mfa_portal_required: "Update the Super Admin portal, then sign in there to continue.",
+    super_admin_mfa_unavailable: "Authenticator sign-in is not configured. Contact your system administrator.",
+    mfa_challenge_expired: "This sign-in step expired. Start again.", invalid_mfa_code: "That authenticator or recovery code is incorrect."
+  })[e] || e || "Unable to sign in. Check your details or contact your administrator.";  useEffect(() => {
     fetch(`${API_BASE}/auth/setup-status`).then((r) => {
       if (!r.ok) throw Error("Server unavailable");
       return r.json();
@@ -429,44 +450,75 @@ function SuperLogin({ onReady }) {
   async function submit(e) {
     e.preventDefault();
     if (submitting) return;
+    const enrollMfa = e.nativeEvent?.submitter?.value === "enroll-mfa";
     setSubmitting(true);
     setError("");
     localStorage.setItem("inviha_super_login_remember", String(remember));
     if (remember) localStorage.setItem("inviha_super_login_email", email.trim());
     else localStorage.removeItem("inviha_super_login_email");
     try {
-      if (setup) {
-        await apiJson("/auth/setup-super-admin", { method: "POST", body: JSON.stringify({ name, email, password }) });
-        setSetup(false);
+      if (phase === "password") {
+        if (setup) {
+          await apiJson("/auth/setup-super-admin", { method: "POST", body: JSON.stringify({ name, email, password }) });
+          setSetup(false);
+        }
+        const out = await apiJson("/auth/login", { method: "POST", body: JSON.stringify({ email, password, rememberMe: remember, enrollMfa, captchaToken: readLoginCaptchaToken() }) });
+        if (out.mfaEnrollmentRequired || out.mfaRequired) {
+          setChallengeId(out.challengeId || "");
+          if (out.mfaEnrollmentRequired) {
+            const enrollment = await apiJson("/auth/mfa/totp/enroll", { method: "POST", body: JSON.stringify({ challengeId: out.challengeId }) });
+            setSetupKey(enrollment.setupKey || "");
+            setPhase("enroll");
+          } else setPhase("verify");
+          return;
+        }
+        if (out.user?.role === "super_admin") { onReady(out.user); return; }
+        throw new Error("Super Admin access required.");
       }
-      const out = await apiJson("/auth/login", { method: "POST", body: JSON.stringify({ email, password, captchaToken: readLoginCaptchaToken() }) });
-      if (out.user?.role !== "super_admin") throw new Error("Super Admin access required.");
-      localStorage.setItem(AUTH_KEY, out.token);
-      onReady(out.user);
+      if (phase === "enroll") {
+        const out = await apiJson("/auth/mfa/totp/confirm", { method: "POST", body: JSON.stringify({ challengeId, code: mfaCode }) });
+        setMfaUser(out.user || null);
+        setRecoveryCodes(Array.isArray(out.recoveryCodes) ? out.recoveryCodes : []);
+        setMfaCode("");
+        setPhase("recovery");
+        return;
+      }
+      if (phase === "verify") {
+        const out = await apiJson("/auth/mfa/verify", { method: "POST", body: JSON.stringify({ challengeId, code: mfaCode }) });
+        if (out.user?.role !== "super_admin") throw new Error("Super Admin access required.");
+        onReady(out.user);
+      }
     } catch (ex) {
+      const code = ex.body?.error;
       setError(ex.message === "Super Admin access required."
         ? ex.message
         : !ex.status || ex.status >= 500
-          ? "Login server unavailable. Start the database tunnel and backend, then try again."
-          : friendly(ex.body?.error || ex.message));
+          ? (code === "super_admin_mfa_unavailable" ? friendly(code) : "Login server unavailable. Start the database tunnel and backend, then try again.")
+          : friendly(code || ex.body?.message || ex.message));
     } finally {
       setSubmitting(false);
     }
   }
-  return <div className="authPage productionAdminLogin compactLoginPage"><LoginVisual /><form className="authCard productionAdminCard masarLoginCard loginCompactCard" onSubmit={submit}>
+  const goBack = () => { setPhase("password"); setChallengeId(""); setSetupKey(""); setMfaCode(""); setRecoveryCodes([]); setMfaUser(null); setError(""); };
+  const heading = phase === "password" ? (setup ? "Create Super Admin" : "Sign in") : phase === "enroll" ? "Set up authenticator" : phase === "verify" ? "Verify your identity" : "Save recovery codes";
+  const subtitle = phase === "password" ? (setup ? "Create the first administrator account for this server." : "Access your fleet dashboard.") : phase === "enroll" ? "Add this account to an authenticator app, then enter its 6-digit code." : phase === "verify" ? "Enter the 6-digit code from your authenticator app, or a recovery code." : "Keep these codes somewhere safe. Each code works once.";
+  const continueAfterRecovery = () => { if (mfaUser?.role === "super_admin") onReady(mfaUser); else { setPhase("password"); setError("Authenticator setup completed. Sign in again to continue."); } };
+  return <div className="authPage productionAdminLogin compactLoginPage"><LoginVisual /><form className="authCard productionAdminCard masarLoginCard loginCompactCard" onSubmit={phase === "recovery" ? (e) => { e.preventDefault(); continueAfterRecovery(); } : submit}>
     <LoginBadge />
-    <h1>{setup ? "Create Super Admin" : "Sign in"}</h1>
-    <p>{setup ? "Create the first administrator account for this server." : "Access your fleet dashboard."}</p>
-    {setup && <div className="loginField"><label className="loginFieldLabel" htmlFor="super-admin-name">Name</label><input id="super-admin-name" name="name" value={name} onChange={(e) => setName(e.target.value)} required /></div>}
-    <div className="loginField"><label className="loginFieldLabel" htmlFor="super-admin-email">Email address</label><span className="loginInputWrap"><Mail aria-hidden="true"/><input id="super-admin-email" name="email" type="email" autoComplete="username" placeholder="Enter your email address" value={email} onChange={(e) => setEmail(e.target.value)} required /></span></div>
-    <div className="loginField"><div className="loginPasswordHeading"><label className="loginFieldLabel" htmlFor="super-admin-password">Password</label>{!setup && <LoginRecoveryLink/>}</div><span className="fleetPassword loginInputWrap"><Lock aria-hidden="true"/><input id="super-admin-password" name="password" type={showPassword ? "text" : "password"} autoComplete={setup ? "new-password" : "current-password"} placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} minLength="8" required /><button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}><Eye aria-hidden="true"/></button></span></div>
+    <h1>{heading}</h1>
+    <p>{subtitle}</p>
+    {phase === "password" ? <>
+      {setup && <div className="loginField"><label className="loginFieldLabel" htmlFor="super-admin-name">Name</label><input id="super-admin-name" name="name" value={name} onChange={(e) => setName(e.target.value)} required /></div>}
+      <div className="loginField"><label className="loginFieldLabel" htmlFor="super-admin-email">Email address</label><span className="loginInputWrap"><Mail aria-hidden="true"/><input id="super-admin-email" name="email" type="email" autoComplete="username" placeholder="Enter your email address" value={email} onChange={(e) => setEmail(e.target.value)} required /></span></div>
+      <div className="loginField"><div className="loginPasswordHeading"><label className="loginFieldLabel" htmlFor="super-admin-password">Password</label>{!setup && <LoginRecoveryLink/>}</div><span className="fleetPassword loginInputWrap"><Lock aria-hidden="true"/><input id="super-admin-password" name="password" type={showPassword ? "text" : "password"} autoComplete={setup ? "new-password" : "current-password"} placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} minLength="8" required /><button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}><Eye aria-hidden="true"/></button></span></div>
+      {!setup && <label className="loginRemember" htmlFor="super-admin-remember"><input id="super-admin-remember" type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />Remember me</label>}
+      <LoginCaptcha />
+    </> : phase === "enroll" ? <div className="mfaSetupPanel"><b>Authenticator setup key</b><code className="mfaSetupKey">{setupKey || "Loading setup key…"}</code><p>In your authenticator app, choose “enter setup key” and use time-based codes.</p><div className="loginField"><label className="loginFieldLabel" htmlFor="mfa-setup-code">6-digit code</label><input id="mfa-setup-code" className="mfaCodeInput" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))} required /></div></div> : phase === "verify" ? <div className="loginField"><label className="loginFieldLabel" htmlFor="mfa-verify-code">Authenticator or recovery code</label><input id="mfa-verify-code" className="mfaCodeInput" autoComplete="one-time-code" value={mfaCode} onChange={(e) => setMfaCode(e.target.value.trimStart())} required /></div> : <div className="mfaRecoveryPanel"><div className="mfaRecoveryCodes">{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div><button type="button" className="secondaryBtn" onClick={async () => { try { await navigator.clipboard.writeText(recoveryCodes.join("\n")); setCopied(true); } catch { setError("Clipboard access is unavailable. Copy the codes manually before continuing."); } }}><Copy aria-hidden="true"/>{copied ? "Copied" : "Copy recovery codes"}</button></div>}
     {error && <div className="loginFieldError" role="alert">{error}</div>}
-    {!setup && <label className="loginRemember" htmlFor="super-admin-remember"><input id="super-admin-remember" type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />Remember me</label>}
-    <LoginCaptcha />
-    <button className="greenBtn loginSubmit" disabled={loading || submitting}>{loading ? "Checking server..." : submitting ? "Signing in…" : setup ? "Create Account & Login" : "Sign in"}</button>
-    <LoginAppLinks />
-    <LoginSupportLinks />
-    <div className="loginCopyright">© 2026 Al Masar Track</div>
+    {phase !== "password" && phase !== "recovery" && <button className="backToLogin" type="button" onClick={goBack}>Back to sign in</button>}
+    <button className="primary loginSubmit" disabled={loading || submitting || (phase === "enroll" && setupKey === "")}>{loading ? "Checking server..." : submitting ? "Please wait…" : phase === "password" ? setup ? "Create Account & Continue" : "Sign in" : phase === "enroll" ? "Verify and enable MFA" : phase === "verify" ? "Verify & sign in" : "I saved my recovery codes"}</button>
+    {phase === "password" && !setup && <button className="mfaOptInButton" type="submit" name="action" value="enroll-mfa" disabled={loading || submitting}>Set up authenticator now</button>}
+    {phase === "password" && <><LoginAppLinks /><LoginSupportLinks /><div className="loginCopyright">© 2026 Al Masar Track</div></>}
   </form></div>;
 }
 function Sidebar({ page, setPage, counts, settings, onLogout, onRestartTracking, restarting }) {
@@ -686,7 +738,7 @@ function CompaniesPage({ data, setData, setPage, setCompanyFilter }) {
     }
     try {
       const out = await apiJson("/users/" + user.id + "/support-login", { method: "POST" });
-      tab.location.replace(window.location.origin.replace("admin.", "track.") + "/?supportToken=" + encodeURIComponent(out.token));
+      tab.location.replace(window.location.origin + "/support/");
     } catch (e) {
       tab.close();
       alert(e.body?.error || "Unable to open the user account.");
@@ -805,7 +857,7 @@ function CompanyUsersPage({ data, setData, reload }) {
     if (!tab) return alert("Allow popups to open the user account.");
     try {
       const out = await apiJson("/users/" + user.id + "/support-login", { method: "POST" });
-      tab.location.replace(window.location.origin.replace("admin.", "track.") + "/?supportToken=" + encodeURIComponent(out.token));
+      tab.location.replace(window.location.origin + "/support/");
     } catch (error) {
       tab.close();
       alert(error.body?.error || "Unable to open the user account.");
@@ -914,8 +966,7 @@ function SubAccountsModal({ data, company, onClose, onSave }) {
     }
     try {
       const out = await apiJson(`/users/${u.id}/support-login`, { method: "POST" });
-      tab.sessionStorage.setItem("inviha_company_support_token", out.token);
-      tab.location.replace(window.location.origin.replace("admin.", "track.") + "/?supportToken=" + encodeURIComponent(out.token));
+      tab.location.replace(window.location.origin + "/support/");
     } catch (e) {
       tab.close();
       alert(e.body?.error || "Unable to open the user account.");
@@ -1609,11 +1660,6 @@ function App() {
   const [apiReady, setApiReady] = useState(false);
   useLanguageSetting(data.settings.language);
   useEffect(() => {
-    const t = getToken();
-    if (!t) {
-      setAuthChecked(true);
-      return;
-    }
     apiJson("/auth/me").then((u) => {
       if (u.role === "super_admin") setAuthUser(u);
       else localStorage.removeItem(AUTH_KEY);
@@ -1651,7 +1697,8 @@ function App() {
       return [];
     })]);
     version.current = Number(remote.version);
-    const cUi = companies.map(apiCompanyToUi), vUi = vehicles.map(apiVehicleToUi).map((v) => {
+    const cUi = companies.map(apiCompanyToUi), vUi = vehicles.map(apiVehicleToUi).map((raw) => {
+      const v = withInventoryTimestamp(raw, inventory);
       const s = fleetState(v, normalizeData(remote.data).settings);
       return { ...v, status: { moving: "Moving", idle: "Idle", parked: "Parked", untracked: "Currently Untracked", offline: "Offline", never: "Not Tracked Yet" }[s], deviceStatus: s === "offline" || s === "never" ? "Offline" : "Online" };
     });
@@ -1794,7 +1841,8 @@ function App() {
       if (!alive) return;
       stopStream = subscribeVehicleStream((rows) => {
         setDataState((prev) => {
-          const settings = normalizeData(prev).settings, vehicles = rows.map(apiVehicleToUi).map((v) => {
+          const settings = normalizeData(prev).settings, vehicles = rows.map(apiVehicleToUi).map((raw) => {
+            const v = withInventoryTimestamp(raw, prev.devices);
             const s = fleetState(v, settings);
             return { ...v, status: { moving: "Moving", idle: "Idle", parked: "Parked", untracked: "Currently Untracked", offline: "Offline", never: "Not Tracked Yet" }[s], deviceStatus: s === "offline" || s === "never" ? "Offline" : "Online" };
           });
