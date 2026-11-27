@@ -8,7 +8,16 @@ export const authToken=()=>'';
 export const setAuthToken=()=>{for(const key of [FLEET_KEY,SCHOOL_KEY,ADMIN_KEY,SUPPORT_KEY]){try{localStorage.removeItem(key)}catch{}}try{sessionStorage.removeItem(SUPPORT_KEY)}catch{}};
 setAuthToken();
 function endpoint(path){if(!useSchoolApi())return `${FLEET_BASE}${path}`;const routes={'/auth/login':'/school/auth/login','/auth/me':'/school/auth/me','/auth/logout':'/school/auth/logout','/company/me':'/school/company/me','/company/state':'/school/state','/vehicles':'/school/vehicles','/vehicles/stream':'/school/vehicles/stream'};return `${SCHOOL_BASE}${routes[path]||path}`}
-async function req(path,opts={}){const url=endpoint(path),headers=authHeaders({'Content-Type':'application/json',...(opts.headers||{})});delete headers.Authorization;const r=await fetch(url,{...opts,credentials:opts.credentials||'same-origin',headers});let body=null;try{body=await r.json()}catch{}if(!r.ok){if(r.status===401&&path!=='/auth/login'){setAuthToken('');if(path!=='/auth/me')setTimeout(()=>location.reload(),0)}const raw=body?.message||body?.error;const message=raw&&/[ .]/.test(raw)&&!/[{}<>]/.test(raw)?raw:({401:'Your session has expired. Please sign in again.',403:'Your account does not have permission for this action.',409:'These records changed. Refresh and try again.',413:'The saved data is too large. Use a smaller logo or photo.'}[r.status]||'The request could not be completed. Please try again.');const e=new Error(message);e.body=body;e.status=r.status;throw e}return body}
+async function req(path,opts={}){const url=endpoint(path),headers=authHeaders({'Content-Type':'application/json',...(opts.headers||{})});delete headers.Authorization;const r=await fetch(url,{...opts,credentials:opts.credentials||'same-origin',headers});let body=null;try{body=await r.json()}catch{}if(!r.ok){
+  if(r.status===401&&path!=='/auth/login'){
+    setAuthToken('');
+    if(useSchoolApi()){
+      if(path!=='/auth/me')setTimeout(()=>location.reload(),0)
+    }else if(path!=='/auth/logout'){
+      window.dispatchEvent(new CustomEvent('masar-company-unauthorized',{detail:path}))
+    }
+  }
+  const raw=body?.message||body?.error;const message=raw&&/[ .]/.test(raw)&&!/[{}<>]/.test(raw)?raw:({401:'Your session has expired. Please sign in again.',403:'Your account does not have permission for this action.',409:'These records changed. Refresh and try again.',413:'The saved data is too large. Use a smaller logo or photo.'}[r.status]||'The request could not be completed. Please try again.');const e=new Error(message);e.body=body;e.status=r.status;throw e}return body}
 const mapUser=u=>({...u.metadata,id:Number(u.id),companyId:Number(u.companyId),name:u.name,email:u.email,role:u.metadata?.displayRole||(u.role==='company_admin'?'Company Admin':'Viewer'),status:u.status==='active'?'Active':'Inactive',password:''});
 export const profileRequest=req;
 export function subscribeVehicles(onRows,onConnection){
