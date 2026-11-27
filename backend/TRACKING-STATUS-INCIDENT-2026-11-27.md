@@ -30,7 +30,7 @@ For **every change to backend response shaping, security redaction, vehicle API 
 4. Run affected tests and builds, review the UI visually without replacing existing layouts, and record results in the PR and release notes.
 5. Back up production before a deploy, verify the restore path, deploy the reviewed backend and compatible portal builds together, then repeat the API and three-client checks. Stop or roll back if any client shows a mismatch.
 
-The GitHub workflow in `.github/workflows/tracking-contract.yml` runs the automated regression on pull requests to `main`. To make that check impossible to skip, a repository administrator must also add **Tracking API contract / tracker-date-contract** as a required status check in the `main` branch protection or ruleset. Manual live checks cannot be enforced by CI and must be signed off in each release note.
+The GitHub workflow in `.github/workflows/tracking-contract.yml` runs the automated regression on pull requests to `main`. On 27 November 2026, the `main` branch ruleset **Mandatory fleet tracking date check** was activated with `tracker-date-contract` required and no bypass actors; the existing branch protection and administrator enforcement remained in place. The workflow passed on PR #3. Manual live checks cannot be enforced by CI and must be signed off in each release note.
 
 ## Release status and remaining work
 
