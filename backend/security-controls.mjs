@@ -270,6 +270,7 @@ const sensitiveFieldName = /(?:password|passwd|passphrase|secret|token|api[_-]?k
 
 export function redactSensitiveData(value) {
   if (Array.isArray(value)) return value.map(redactSensitiveData);
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.toISOString() : null;
   if (typeof value === 'string') return redactSensitiveText(value);
   if (!value || typeof value !== 'object') return value;
   const output = {};

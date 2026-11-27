@@ -168,6 +168,12 @@ test('API response redaction removes nested credential fields without changing o
   assert.deepEqual(result,{id:17,name:'Bus 17',metadata:{cameras:[{url:'https://camera.local/live'}]},attributes:{ignition:true}});
 });
 
+test('API response redaction preserves tracker timestamps while removing credentials',()=>{
+  const received=new Date('2026-11-27T01:00:00.000Z');
+  const result=redactSensitiveData({last_update:received,position_time:received,metadata:{password:'hidden'},invalid_time:new Date('invalid')});
+  assert.deepEqual(result,{last_update:'2026-11-27T01:00:00.000Z',position_time:'2026-11-27T01:00:00.000Z',metadata:{},invalid_time:null});
+});
+
 test('web sessions use distinct HttpOnly same-site cookies and expire safely',()=>{
   const request={secure:false,headers:{'x-masar-client':'web-company','x-forwarded-proto':'https'}};
   const headers=new Map(),response={getHeader:name=>headers.get(name),setHeader:(name,value)=>headers.set(name,value)};

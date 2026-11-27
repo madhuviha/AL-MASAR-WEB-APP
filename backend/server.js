@@ -765,30 +765,6 @@ app.get('/api/protocol-profiles/status',requireAuth,requireSuper,async(req,res)=
 async function apiDevices(){ const r=await trackingApi.get('/api/devices'); return Array.isArray(r.data)?r.data:[]; }
 async function apiPositions(){ const r=await trackingApi.get('/api/positions'); return Array.isArray(r.data)?r.data:[]; }
 
-// Traccar's REST inventory and PostgreSQL live snapshot can briefly disagree
-// during reconnects. Use the freshest server-received device timestamp in the
-// shared snapshot so fleet status and Diagnostics classify the same packet.
-const LIVE_DEVICE_FRESHNESS_TTL_MS=10_000;
-let liveDeviceFreshnessAt=0,liveDeviceFreshnessCache=new Map(),liveDeviceFreshnessPending=null;
-async function liveDeviceFreshness(){
-  if(Date.now()-liveDeviceFreshnessAt<LIVE_DEVICE_FRESHNESS_TTL_MS)return liveDeviceFreshnessCache;
-  if(liveDeviceFreshnessPending)return liveDeviceFreshnessPending;
-  liveDeviceFreshnessPending=apiDevices().then(devices=>{
-    const result=new Map();
-    for(const device of devices){
-      const value=device?.lastUpdate;
-      if(value&&Number.isFinite(Date.parse(value)))result.set(String(device.id),value);
-    }
-    liveDeviceFreshnessCache=result;
-    liveDeviceFreshnessAt=Date.now();
-    return result;
-  }).catch(()=>{
-    liveDeviceFreshnessAt=Date.now();
-    return liveDeviceFreshnessCache;
-  }).finally(()=>{liveDeviceFreshnessPending=null});
-  return liveDeviceFreshnessPending;
-}
-
 const LIVE_RAW_CACHE_MS=2500;
 let liveRawCache=null,liveRawCacheAt=0,liveRawPending=null;
 
@@ -812,14 +788,7 @@ async function loadLiveSnapshotsRaw(){
           ORDER BY id DESC LIMIT 1
         ) vp ON p.valid=FALSE
       `);
-      const apiFreshness=await liveDeviceFreshness();
-      const consistentRows=rows.map(device=>{
-        const apiLastUpdate=apiFreshness.get(String(device.id));
-        return apiLastUpdate&&timeMs(apiLastUpdate)>timeMs(newestTimestamp(device))
-          ? {...device,lastupdate:apiLastUpdate}
-          : device;
-      });
-      return { source:'database', rows:consistentRows };
+      return { source:'database', rows };
     } catch(e){ console.error('Live DB fallback warning:', e.message); }
   }
   const [devices,positions]=await Promise.all([apiDevices(),apiPositions()]);
