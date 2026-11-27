@@ -233,6 +233,16 @@ function apiCompanyToUi(c) {
 function apiVehicleToUi(v) {
   return { ...v.metadata || {}, id: Number(v.id), name: v.name || "", plate: v.plate_number || "", license: v.registration || "", company: v.company_name || "", companyId: v.company_id ? Number(v.company_id) : null, imei: v.imei || "", protocol: v.protocol || "GT06", deviceModel: v.device_model || "", status: (v.status || "Offline").replace(/^./, (m) => m.toUpperCase()), deviceStatus: (v.connection_status || v.device_status || "offline").replace(/^./, (m) => m.toUpperCase()), category: v.metadata?.category || "Car", userEmail: v.metadata?.userEmail || "", expiry: v.expiration_date ? String(v.expiration_date).slice(0, 10) : "", sensorGroup: v.metadata?.sensorGroup || "", sensors: v.metadata?.sensors || [], deviceId: v.traccar_device_id || null, active: v.active !== false, latitude: v.latitude ?? null, longitude: v.longitude ?? null, current_driver: v.current_driver, mapped_io: v.mapped_io, telemetry: v.telemetry, speedKph: v.speed_kph ?? null, ignition: v.ignition ?? null, motion: v.motion ?? null, lastUpdate: v.last_update || null, positionTime: v.position_time || null, course: v.course ?? null, altitude: v.altitude ?? null, attributes: v.attributes || {}, fixTime: v.fix_time, positionValid: v.position_valid };
 }
+function withInventoryTimestamp(vehicle, inventory = []) {
+  const device = inventory.find((d) => vehicle.deviceId != null && String(d.id) === String(vehicle.deviceId))
+    || inventory.find((d) => vehicle.imei && String(d.imei) === String(vehicle.imei));
+  const timestamps = [vehicle.lastUpdate, device?.lastSeen]
+    .map((value) => ({ value, time: Date.parse(value) }))
+    .filter(({ time }) => Number.isFinite(time));
+  if (!timestamps.length) return vehicle;
+  const latest = timestamps.reduce((a, b) => a.time >= b.time ? a : b);
+  return { ...vehicle, lastUpdate: latest.value };
+}
 const companyPermissionOptions = ["Dashboard", "Live Map", "Vehicle List", "Vehicle Details", "History", "Trips", "Playback", "Reports", "Drivers", "RFID / iButton", "Alerts", "Geofences", "Sensors", "Fuel Monitoring", "Temperature Monitoring", "Seat Belt Monitoring", "Ignition Status", "Harsh Braking", "Harsh Acceleration", "Harsh Cornering", "Overspeed", "Idling", "Maintenance", "Commands", "Immobilizer", "Export Reports", "User Management"];
 const companyVehiclePermissionOptions = ["Immobilizer", "Add Vehicle", "Edit Vehicle", "Delete Vehicle", "Change IMEI", "Change Tracker Configuration", "Sensors/I/O"];
 const initialData = {
@@ -1687,7 +1697,8 @@ function App() {
       return [];
     })]);
     version.current = Number(remote.version);
-    const cUi = companies.map(apiCompanyToUi), vUi = vehicles.map(apiVehicleToUi).map((v) => {
+    const cUi = companies.map(apiCompanyToUi), vUi = vehicles.map(apiVehicleToUi).map((raw) => {
+      const v = withInventoryTimestamp(raw, inventory);
       const s = fleetState(v, normalizeData(remote.data).settings);
       return { ...v, status: { moving: "Moving", idle: "Idle", parked: "Parked", untracked: "Currently Untracked", offline: "Offline", never: "Not Tracked Yet" }[s], deviceStatus: s === "offline" || s === "never" ? "Offline" : "Online" };
     });
@@ -1830,7 +1841,8 @@ function App() {
       if (!alive) return;
       stopStream = subscribeVehicleStream((rows) => {
         setDataState((prev) => {
-          const settings = normalizeData(prev).settings, vehicles = rows.map(apiVehicleToUi).map((v) => {
+          const settings = normalizeData(prev).settings, vehicles = rows.map(apiVehicleToUi).map((raw) => {
+            const v = withInventoryTimestamp(raw, prev.devices);
             const s = fleetState(v, settings);
             return { ...v, status: { moving: "Moving", idle: "Idle", parked: "Parked", untracked: "Currently Untracked", offline: "Offline", never: "Not Tracked Yet" }[s], deviceStatus: s === "offline" || s === "never" ? "Offline" : "Online" };
           });
