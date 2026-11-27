@@ -89,6 +89,8 @@ node --test .\backend\tests\device-admission.test.mjs
 
 ## Required change workflow
 
+**High-priority fleet-status gate:** Before every backend response, security redaction, vehicle API, tracker-status, or status-display change, follow the mandatory automated and live checks in `backend/TRACKING-STATUS-INCIDENT-2026-11-27.md`. A passing `/health` response alone does not verify the vehicle API contract. Record the checked vehicle statuses for Super Admin, Company Admin, and Android in the release notes. Preserve the existing portal layouts unless a separate UI change was explicitly requested.
+
 1. Make the change only in editable source.
 2. Add or update a meaningful regression test when business logic, data handling, permissions, alerts, commands or settings change.
 3. Run the affected tests.

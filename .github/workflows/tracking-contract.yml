@@ -1,0 +1,27 @@
+name: Tracking API contract
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [development, deployment]
+
+permissions:
+  contents: read
+
+jobs:
+  tracker-date-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+      - name: Verify API redaction preserves tracker dates
+        run: node --test backend/tests/security-controls.test.mjs
